@@ -22,7 +22,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Save, ArrowRight, RotateCw, Loader2 } from 'lucide-react';
@@ -30,26 +29,23 @@ import Link from 'next/link';
 import { useParams, notFound, useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
 import { useDoc, useFirebase, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
-
-
-const screens = [
-  { id: 'dashboard', label: 'لوحة التحكم' },
-  { id: 'employees', label: 'الموظفين' },
-  { id: 'attendance', label: 'الحضور والإنصراف' },
-  { id: 'scan', label: 'مسح QR' },
-  { id: 'payroll', label: 'الرواتب' },
-  { id: 'settings', label: 'الإعدادات' },
-] as const;
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const employeeFormSchema = z.object({
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'رقم الموظف مطلوب' }),
-  department: z.string().min(1, { message: 'القسم مطلوب' }),
   jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   baseSalary: z.coerce.number().min(0, { message: 'الراتب يجب أن يكون رقماً موجباً' }),
   status: z.enum(['active', 'inactive', 'on_leave'], { required_error: 'الحالة مطلوبة' }),
+  role: z.enum(['employee', 'hr', 'admin'], { required_error: 'الصلاحية مطلوبة' }),
   deviceVerificationEnabled: z.boolean().default(false),
   deviceId: z.string().optional(),
 });
@@ -76,10 +72,10 @@ export default function EditEmployeePage() {
     defaultValues: {
       name: '',
       employeeId: '',
-      department: '',
       jobTitle: '',
       baseSalary: 0,
       status: 'active',
+      role: 'employee',
       deviceVerificationEnabled: false,
       deviceId: '',
     },
@@ -87,25 +83,57 @@ export default function EditEmployeePage() {
 
   useEffect(() => {
     if (employee) {
-      form.reset({
-        name: employee.name,
-        employeeId: employee.employeeId,
-        department: employee.department,
-        jobTitle: employee.jobTitle,
-        baseSalary: employee.baseSalary,
-        status: employee.status,
-        deviceVerificationEnabled: employee.deviceVerificationEnabled ?? false,
-        deviceId: employee.deviceId ?? '',
-      });
+      const fetchRole = async () => {
+        let role = 'employee';
+        if (firestore) {
+          const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
+          const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
+          const [adminSnap, hrSnap] = await Promise.all([getDoc(adminRoleRef), getDoc(hrRoleRef)]);
+          if (adminSnap.exists()) {
+            role = 'admin';
+          } else if (hrSnap.exists()) {
+            role = 'hr';
+          }
+        }
+        form.reset({
+          name: employee.name,
+          employeeId: employee.employeeId,
+          jobTitle: employee.jobTitle,
+          baseSalary: employee.baseSalary,
+          status: employee.status,
+          role: role as 'employee' | 'hr' | 'admin',
+          deviceVerificationEnabled: employee.deviceVerificationEnabled ?? false,
+          deviceId: employee.deviceId ?? '',
+        });
+      };
+      fetchRole();
     }
-  }, [employee, form]);
+  }, [employee, form, firestore]);
 
   const deviceVerificationEnabled = form.watch('deviceVerificationEnabled');
 
-  function onSubmit(data: EmployeeFormValues) {
-    if (!employeeDocRef) return;
+  async function onSubmit(data: EmployeeFormValues) {
+    if (!employeeDocRef || !firestore) return;
     
-    updateDocumentNonBlocking(employeeDocRef, data);
+    const { role, ...employeeData } = data;
+
+    updateDocumentNonBlocking(employeeDocRef, employeeData);
+
+    // Update roles
+    const adminRoleRef = doc(firestore, 'roles_admin', employeeId);
+    const hrRoleRef = doc(firestore, 'roles_hr', employeeId);
+
+    if (role === 'admin') {
+      await setDoc(adminRoleRef, { uid: employeeId });
+      await setDoc(hrRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(hrRoleRef, { uid: null }));
+    } else if (role === 'hr') {
+      await setDoc(hrRoleRef, { uid: employeeId });
+      await setDoc(adminRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(adminRoleRef, { uid: null }));
+    } else {
+      await setDoc(adminRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(adminRoleRef, { uid: null }));
+      await setDoc(hrRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(hrRoleRef, { uid: null }));
+    }
+
 
     toast({
       title: 'تم تحديث بيانات الموظف بنجاح',
@@ -189,19 +217,6 @@ export default function EditEmployeePage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>القسم</FormLabel>
-                    <FormControl>
-                      <Input placeholder="مثال: الهندسة" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
                <FormField
                 control={form.control}
                 name="jobTitle"
@@ -275,12 +290,34 @@ export default function EditEmployeePage() {
 
           <Card>
             <CardHeader>
-                <CardTitle>إعدادات الأمان</CardTitle>
+                <CardTitle>الصلاحيات والأمان</CardTitle>
                 <CardDescription>
-                    إدارة إعدادات الأمان الخاصة بالموظف.
+                    إدارة صلاحيات الوصول وإعدادات الأمان الخاصة بالموظف.
                 </CardDescription>
             </CardHeader>
             <CardContent className='space-y-6'>
+                 <FormField
+                    control={form.control}
+                    name="role"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>الصلاحية</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue placeholder="اختر صلاحية للموظف" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value="employee">موظف</SelectItem>
+                            <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
+                            <SelectItem value="admin">مدير نظام</SelectItem>
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
                 <FormField
                 control={form.control}
                 name="deviceVerificationEnabled"
@@ -342,3 +379,5 @@ export default function EditEmployeePage() {
     </>
   );
 }
+
+    

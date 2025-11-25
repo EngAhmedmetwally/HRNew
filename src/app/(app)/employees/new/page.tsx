@@ -29,18 +29,26 @@ import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
 import { useFirebase, setDocumentNonBlocking } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 
 const employeeFormSchema = z.object({
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'رقم الموظف مطلوب' }),
-  department: z.string().min(1, { message: 'القسم مطلوب' }),
+  password: z.string().min(6, { message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' }),
   jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
   hireDate: z.string().min(1, { message: 'تاريخ التعيين مطلوب' }),
   baseSalary: z.coerce.number().min(0, { message: 'الراتب يجب أن يكون رقماً موجباً' }),
   status: z.enum(['active', 'inactive', 'on_leave'], { required_error: 'الحالة مطلوبة' }),
+  role: z.enum(['employee', 'hr', 'admin'], { required_error: 'الصلاحية مطلوبة' }),
   deviceVerificationEnabled: z.boolean().default(false),
 });
 
@@ -56,12 +64,13 @@ export default function NewEmployeePage() {
     defaultValues: {
       name: '',
       employeeId: '',
-      department: '',
+      password: '',
       jobTitle: '',
       contractType: 'full-time',
       hireDate: new Date().toISOString().split('T')[0], // Default to today
       baseSalary: 0,
       status: 'active',
+      role: 'employee',
       deviceVerificationEnabled: false,
     },
   });
@@ -73,9 +82,9 @@ export default function NewEmployeePage() {
     }
 
     try {
-      // 1. Generate a dummy email and password
+      // 1. Generate a dummy email and use the provided password
       const email = `${data.employeeId}@hr-pulse.system`; // A unique, internal-only email
-      const password = Math.random().toString(36).slice(-8); // A random password
+      const { password, role, ...employeeData } = data;
 
       // 2. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -83,14 +92,25 @@ export default function NewEmployeePage() {
       
       // 3. Prepare employee data for Firestore
       const employeeDoc = {
-        ...data,
+        ...employeeData,
         id: user.uid, // Use the UID from Auth as the document ID
         email: email, // Store the email for future logins
+        department: '', // Set department to empty string as it's removed
       };
 
       // 4. Save employee data to Firestore
       const employeeDocRef = doc(firestore, 'employees', user.uid);
-      setDocumentNonBlocking(employeeDocRef, employeeDoc, { merge: false });
+      await setDoc(employeeDocRef, employeeDoc);
+
+      // 5. Set user role if not 'employee'
+      if (role === 'hr') {
+        const hrRoleRef = doc(firestore, 'roles_hr', user.uid);
+        await setDoc(hrRoleRef, { uid: user.uid });
+      } else if (role === 'admin') {
+        const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+        await setDoc(adminRoleRef, { uid: user.uid });
+      }
+
 
       toast({
         title: 'تمت إضافة الموظف بنجاح',
@@ -157,7 +177,7 @@ export default function NewEmployeePage() {
                 name="employeeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>رقم الموظف</FormLabel>
+                    <FormLabel>اسم المستخدم (رقم الموظف)</FormLabel>
                     <FormControl>
                       <Input placeholder="مثال: E006" {...field} />
                     </FormControl>
@@ -168,14 +188,14 @@ export default function NewEmployeePage() {
                   </FormItem>
                 )}
               />
-              <FormField
+               <FormField
                 control={form.control}
-                name="department"
+                name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>القسم</FormLabel>
+                    <FormLabel>كلمة المرور</FormLabel>
                     <FormControl>
-                      <Input placeholder="مثال: المبيعات" {...field} />
+                      <Input type="password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -296,11 +316,33 @@ export default function NewEmployeePage() {
                   </FormItem>
                 )}
               />
+                <FormField
+                    control={form.control}
+                    name="role"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>الصلاحية</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue placeholder="اختر صلاحية للموظف" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value="employee">موظف</SelectItem>
+                            <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
+                            <SelectItem value="admin">مدير نظام</SelectItem>
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
                <FormField
                 control={form.control}
                 name="deviceVerificationEnabled"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 md:col-span-2">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">
                         تفعيل التحقق من الجهاز
@@ -333,3 +375,5 @@ export default function NewEmployeePage() {
     </>
   );
 }
+
+    

@@ -18,6 +18,10 @@
           "type": "string",
           "description": "Full name of the employee."
         },
+        "password": {
+          "type": "string",
+          "description": "Password for the employee's account."
+        },
         "department": {
           "type": "string",
           "description": "Department the employee belongs to."
