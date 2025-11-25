@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { Save, ArrowRight } from 'lucide-react';
+import { Save, ArrowRight, RotateCw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, notFound } from 'next/navigation';
 import { employees } from '@/lib/data'; // Assuming you have a way to fetch a single employee
@@ -54,6 +54,7 @@ const employeeFormSchema = z.object({
     message: 'يجب أن تختار صلاحية واحدة على الأقل.',
   }),
   deviceVerificationEnabled: z.boolean().default(false),
+  deviceId: z.string().optional(),
 }).refine(data => {
     if (data.attendanceType === 'custom') {
         return !!data.checkInTime && !!data.checkOutTime;
@@ -86,6 +87,7 @@ export default function EditEmployeePage() {
       checkInTime: '',
       checkOutTime: '',
       deviceVerificationEnabled: false,
+      deviceId: '',
     },
   });
 
@@ -99,12 +101,14 @@ export default function EditEmployeePage() {
         salary: 5000, // Placeholder
         attendanceType: 'general',
         permissions: ['dashboard', 'attendance'], // Placeholder
-        deviceVerificationEnabled: false, // Placeholder
+        deviceVerificationEnabled: true, // Placeholder to show the new UI
+        deviceId: 'device-id-12345-abcde-placeholder', // Placeholder
       });
     }
   }, [employee, form]);
 
   const attendanceType = form.watch('attendanceType');
+  const deviceVerificationEnabled = form.watch('deviceVerificationEnabled');
 
   function onSubmit(data: EmployeeFormValues) {
     // In a real app, you would update this data in your database
@@ -112,6 +116,14 @@ export default function EditEmployeePage() {
     toast({
       title: 'تم تحديث بيانات الموظف بنجاح',
       description: `تم تحديث حساب الموظف ${data.name}.`,
+    });
+  }
+  
+  function handleResetDeviceId() {
+    form.setValue('deviceId', '');
+    toast({
+        title: 'تم مسح معرّف الجهاز',
+        description: 'سيتم تسجيل معرّف الجهاز الجديد عند تسجيل الدخول التالي.',
     });
   }
 
@@ -237,7 +249,18 @@ export default function EditEmployeePage() {
                   </FormItem>
                 )}
               />
-               <FormField
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+                <CardTitle>إعدادات الأمان</CardTitle>
+                <CardDescription>
+                    إدارة إعدادات الأمان الخاصة بالموظف.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-6'>
+                <FormField
                 control={form.control}
                 name="deviceVerificationEnabled"
                 render={({ field }) => (
@@ -259,6 +282,30 @@ export default function EditEmployeePage() {
                   </FormItem>
                 )}
               />
+              {deviceVerificationEnabled && (
+                <FormField
+                    control={form.control}
+                    name="deviceId"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>معرف الجهاز المسجل</FormLabel>
+                        <div className="flex gap-2">
+                        <FormControl>
+                            <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" />
+                        </FormControl>
+                        <Button type="button" variant="secondary" onClick={handleResetDeviceId} disabled={!field.value}>
+                            <RotateCw className="ml-2 h-4 w-4" />
+                            إعادة تعيين
+                        </Button>
+                        </div>
+                        <FormDescription>
+                         يتم تسجيل الجهاز تلقائياً عند أول عملية تسجيل دخول ناجحة بعد تفعيل الميزة أو إعادة تعيينها.
+                        </FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+              )}
             </CardContent>
           </Card>
 
