@@ -13,9 +13,12 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Camera, CheckCircle, XCircle } from 'lucide-react';
 import jsQR from 'jsqr';
+import { useFirebase } from '@/firebase/provider';
+import { doc, getDoc, serverTimestamp, setDoc, getDocs, collection, query, where, Timestamp } from 'firebase/firestore';
+import { setDocumentNonBlocking } from '@/firebase';
 
-// This would come from settings in a real app
-const QR_VALIDITY_SECONDS = 5;
+// Mock current user - in a real app this would come from useUser()
+const MOCK_USER_ID = "E001";
 
 export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -24,6 +27,7 @@ export default function ScanPage() {
   const [scanResult, setScanResult] = useState<{data: string, message: string} | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const { toast } = useToast();
+  const { firestore } = useFirebase();
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -68,26 +72,91 @@ export default function ScanPage() {
     setIsScanning(true);
   };
 
-  const handleSuccessfulScan = (type: 'Check-in' | 'Check-out') => {
-      // In a real app, this would write to Firestore.
+    const handleSuccessfulScan = async (qrId: string, qrToken: string) => {
+    if (!firestore) return;
+    
+    const qrDocRef = doc(firestore, "qrCodes", qrId);
+    const qrDocSnap = await getDoc(qrDocRef);
+
+    if (!qrDocSnap.exists() || qrDocSnap.data().token !== qrToken) {
+        setScanResult({data: 'فشل التحقق', message: 'الكود المستخدم غير صالح أو مزور.'});
+        toast({ variant: 'destructive', title: 'QR Code غير صالح' });
+        return;
+    }
+
+    const qrData = qrDocSnap.data();
+    const now = Timestamp.now();
+    
+    if (now > qrData.validUntil) {
+        setScanResult({data: 'فشل التحقق', message: 'الكود المستخدم منتهي الصلاحية.'});
+        toast({ variant: 'destructive', title: 'QR Code منتهي الصلاحية' });
+        return;
+    }
+    
+    // Logic to record attendance
+    await recordAttendance();
+  };
+
+  const recordAttendance = async () => {
+      if (!firestore) return;
+
       const now = new Date();
-      const successMessage = `تم تسجيل ${type === 'Check-in' ? 'حضورك' : 'انصرافك'} بنجاح في ${now.toLocaleDateString('ar-EG')} الساعة ${now.toLocaleTimeString('ar-EG')}`;
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const day = now.getDate();
       
-      console.log(`Recording attendance: ${type} at ${now.toISOString()}`);
+      const workDayPath = `/workDays/${year}/${month}/${day}/${MOCK_USER_ID}`;
+      const workDayRef = doc(firestore, workDayPath);
+
+      // Fetch deduction policies to calculate delay
+      const policiesRef = collection(firestore, "deductionPolicies");
+      const policiesSnapshot = await getDocs(policiesRef);
+      // Assuming one global policy for simplicity
+      const policy = policiesSnapshot.docs[0]?.data();
+      const gracePeriod = policy?.gracePeriodMinutes || 15;
       
-      toast({
-          title: 'تم التسجيل بنجاح',
-          description: successMessage,
-          className: 'bg-green-500 text-white',
-      });
-      
-      setScanResult({ data: `عملية ناجحة: ${type}`, message: successMessage });
+      // Assuming check-in time is 09:00 for calculation
+      const checkInDeadline = new Date(now);
+      checkInDeadline.setHours(9, gracePeriod, 0, 0); // 09:00 + grace period
+
+      let delayMinutes = 0;
+      if (now > checkInDeadline) {
+          delayMinutes = Math.floor((now.getTime() - checkInDeadline.getTime()) / (1000 * 60)) + gracePeriod;
+      }
+
+      try {
+          // This simulates a check-in. A real app would check if a record exists to decide between check-in/out
+          const workDayData = {
+              id: MOCK_USER_ID,
+              date: serverTimestamp(),
+              employeeId: MOCK_USER_ID,
+              checkInTime: serverTimestamp(),
+              checkOutTime: null,
+              totalWorkHours: 0,
+              delayMinutes: delayMinutes,
+              overtimeHours: 0
+          };
+          
+          setDocumentNonBlocking(workDayRef, workDayData, { merge: true });
+
+          const successMessage = `تم تسجيل حضورك بنجاح في ${now.toLocaleDateString('ar-EG')} الساعة ${now.toLocaleTimeString('ar-EG')}. دقائق التأخير: ${delayMinutes}`;
+          toast({
+              title: 'تم التسجيل بنجاح',
+              description: successMessage,
+              className: 'bg-green-500 text-white',
+          });
+          setScanResult({ data: `عملية ناجحة`, message: successMessage });
+      } catch (e) {
+          console.error("Error recording attendance:", e);
+          toast({ variant: 'destructive', title: 'خطأ في التسجيل', description: 'لم نتمكن من تسجيل حضورك.' });
+          setScanResult({data: 'فشل التسجيل', message: 'حدث خطأ أثناء محاولة تسجيل حضورك في قاعدة البيانات.'});
+      }
   };
   
   useEffect(() => {
     let animationFrameId: number;
 
-    const scan = () => {
+    const scan = async () => {
       if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
         const canvas = canvasRef.current;
         const video = videoRef.current;
@@ -104,25 +173,17 @@ export default function ScanPage() {
 
           if (code) {
             setIsScanning(false);
-            const [timestampStr, secret] = code.data.split('-');
-            const timestamp = parseInt(timestampStr, 10);
-            const now = Date.now();
+            const [qrId, qrToken] = code.data.split('|');
 
-            if (secret === "your-secret-key" && (now - timestamp) < (QR_VALIDITY_SECONDS * 1000)) {
-                // Simple logic to determine check-in or check-out based on time of day
-                const hours = new Date().getHours();
-                if (hours < 14) { // Assume check-in before 2 PM
-                    handleSuccessfulScan('Check-in');
-                } else {
-                    handleSuccessfulScan('Check-out');
-                }
+            if (qrId && qrToken) {
+              await handleSuccessfulScan(qrId, qrToken);
             } else {
                  toast({
                     variant: 'destructive',
                     title: 'QR Code غير صالح',
-                    description: 'هذا الكود غير صالح أو منتهي الصلاحية.',
+                    description: 'هذا الكود لا يتبع التنسيق المطلوب.',
                 });
-                setScanResult({data: 'فشل التحقق', message: 'الكود المستخدم غير صالح أو انتهت صلاحيته.'});
+                setScanResult({data: 'فشل التحقق', message: 'تنسيق بيانات الكود غير صحيح.'});
             }
           }
         }
@@ -140,7 +201,7 @@ export default function ScanPage() {
       cancelAnimationFrame(animationFrameId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isScanning, toast]);
+  }, [isScanning, firestore]);
 
   return (
     <Card className="max-w-md mx-auto">
