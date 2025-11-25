@@ -1,7 +1,6 @@
 'use client';
 
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,7 +8,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { LogIn, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function QrCodePage() {
@@ -65,16 +63,6 @@ export default function QrCodePage() {
             <p className="mb-4 text-sm text-muted-foreground">
               صالح لمدة {countdown} ثانية
             </p>
-            <div className="grid w-full grid-cols-2 gap-4">
-              <Button>
-                <LogIn className="ml-2 h-4 w-4" />
-                QR تسجيل حضور
-              </Button>
-              <Button variant="outline">
-                <LogOut className="ml-2 h-4 w-4" />
-                QR تسجيل انصراف
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>
