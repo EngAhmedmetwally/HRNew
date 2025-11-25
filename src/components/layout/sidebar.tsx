@@ -101,12 +101,7 @@ export function Sidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
+            <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               tooltip={{ children: "الإعدادات", side: "left" }}
@@ -117,7 +112,10 @@ export function Sidebar() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        </SidebarMenu>
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
       </SidebarFooter>
     </AppSidebar>
   );
