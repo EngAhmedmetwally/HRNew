@@ -14,11 +14,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Camera, CheckCircle, XCircle } from 'lucide-react';
 import jsQR from 'jsqr';
 
+// This would come from settings in a real app
+const QR_VALIDITY_SECONDS = 5;
+
 export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<{data: string, message: string} | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const { toast } = useToast();
 
@@ -64,6 +67,22 @@ export default function ScanPage() {
     setScanResult(null);
     setIsScanning(true);
   };
+
+  const handleSuccessfulScan = (type: 'Check-in' | 'Check-out') => {
+      // In a real app, this would write to Firestore.
+      const now = new Date();
+      const successMessage = `تم تسجيل ${type === 'Check-in' ? 'حضورك' : 'انصرافك'} بنجاح في ${now.toLocaleDateString('ar-EG')} الساعة ${now.toLocaleTimeString('ar-EG')}`;
+      
+      console.log(`Recording attendance: ${type} at ${now.toISOString()}`);
+      
+      toast({
+          title: 'تم التسجيل بنجاح',
+          description: successMessage,
+          className: 'bg-green-500 text-white',
+      });
+      
+      setScanResult({ data: `عملية ناجحة: ${type}`, message: successMessage });
+  };
   
   useEffect(() => {
     let animationFrameId: number;
@@ -84,21 +103,26 @@ export default function ScanPage() {
           });
 
           if (code) {
-            setScanResult(code.data);
             setIsScanning(false);
-            // Simple validation
-            if (code.data.includes("your-secret-key")) {
-                 toast({
-                    title: 'تم التسجيل بنجاح',
-                    description: `تم تسجيل حضورك بنجاح.`,
-                    className: 'bg-green-500 text-white',
-                });
+            const [timestampStr, secret] = code.data.split('-');
+            const timestamp = parseInt(timestampStr, 10);
+            const now = Date.now();
+
+            if (secret === "your-secret-key" && (now - timestamp) < (QR_VALIDITY_SECONDS * 1000)) {
+                // Simple logic to determine check-in or check-out based on time of day
+                const hours = new Date().getHours();
+                if (hours < 14) { // Assume check-in before 2 PM
+                    handleSuccessfulScan('Check-in');
+                } else {
+                    handleSuccessfulScan('Check-out');
+                }
             } else {
                  toast({
                     variant: 'destructive',
                     title: 'QR Code غير صالح',
                     description: 'هذا الكود غير صالح أو منتهي الصلاحية.',
                 });
+                setScanResult({data: 'فشل التحقق', message: 'الكود المستخدم غير صالح أو انتهت صلاحيته.'});
             }
           }
         }
@@ -115,6 +139,7 @@ export default function ScanPage() {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isScanning, toast]);
 
   return (
@@ -155,11 +180,11 @@ export default function ScanPage() {
         </div>
 
         {scanResult && (
-             <Alert className="mt-4 border-green-500 text-green-700 dark:border-green-600 dark:text-green-400">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <AlertTitle>تم المسح بنجاح!</AlertTitle>
-                <AlertDescription className="break-all">
-                    البيانات: {scanResult}
+             <Alert className={`mt-4 ${scanResult.data.includes('ناجحة') ? 'border-green-500 text-green-700 dark:border-green-600 dark:text-green-400' : 'border-destructive text-destructive'}`}>
+                {scanResult.data.includes('ناجحة') ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                <AlertTitle>{scanResult.data.includes('ناجحة') ? 'تمت العملية بنجاح!' : 'فشل'}</AlertTitle>
+                <AlertDescription className="break-words">
+                    {scanResult.message}
                 </AlertDescription>
             </Alert>
         )}
