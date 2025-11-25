@@ -3,6 +3,7 @@ import type { ImagePlaceholder } from './placeholder-images';
 export interface Employee {
   id: string; // Corresponds to Firebase Auth UID
   employeeId: string; // Custom employee ID
+  email?: string; // Internal-only email, not for user display
   name: string;
   avatar?: ImagePlaceholder; // Make avatar optional as it might not be in Firestore
   department: string;

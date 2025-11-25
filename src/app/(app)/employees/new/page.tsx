@@ -35,8 +35,6 @@ import { doc } from 'firebase/firestore';
 const employeeFormSchema = z.object({
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'رقم الموظف مطلوب' }),
-  email: z.string().email({ message: 'البريد الإلكتروني غير صالح' }),
-  password: z.string().min(6, { message: 'كلمة السر يجب أن تكون 6 أحرف على الأقل' }),
   department: z.string().min(1, { message: 'القسم مطلوب' }),
   jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
@@ -58,8 +56,6 @@ export default function NewEmployeePage() {
     defaultValues: {
       name: '',
       employeeId: '',
-      email: '',
-      password: '',
       department: '',
       jobTitle: '',
       contractType: 'full-time',
@@ -77,18 +73,22 @@ export default function NewEmployeePage() {
     }
 
     try {
-      // 1. Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      // 1. Generate a dummy email and password
+      const email = `${data.employeeId}@hr-pulse.system`; // A unique, internal-only email
+      const password = Math.random().toString(36).slice(-8); // A random password
+
+      // 2. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // 2. Prepare employee data for Firestore (excluding password)
-      const { password, ...employeeData } = data;
+      // 3. Prepare employee data for Firestore
       const employeeDoc = {
-        ...employeeData,
+        ...data,
         id: user.uid, // Use the UID from Auth as the document ID
+        email: email, // Store the email for future logins
       };
 
-      // 3. Save employee data to Firestore
+      // 4. Save employee data to Firestore
       const employeeDocRef = doc(firestore, 'employees', user.uid);
       setDocumentNonBlocking(employeeDocRef, employeeDoc, { merge: false });
 
@@ -101,9 +101,7 @@ export default function NewEmployeePage() {
       console.error("Error creating employee:", error);
       let description = "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.";
       if (error.code === 'auth/email-already-in-use') {
-        description = "هذا البريد الإلكتروني مستخدم بالفعل.";
-      } else if (error.code === 'auth/weak-password') {
-        description = "كلمة السر ضعيفة جدًا. يرجى اختيار كلمة سر أقوى.";
+        description = "رقم الموظف هذا مستخدم بالفعل.";
       }
       toast({
         variant: 'destructive',
@@ -164,37 +162,8 @@ export default function NewEmployeePage() {
                       <Input placeholder="مثال: E006" {...field} />
                     </FormControl>
                      <FormDescription>
-                        معرف فريد للموظف داخل الشركة.
+                        معرف فريد للموظف داخل الشركة. سيتم استخدامه لتسجيل الدخول.
                     </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>البريد الإلكتروني</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="example@company.com" {...field} />
-                    </FormControl>
-                     <FormDescription>
-                        سيتم استخدامه لتسجيل الدخول.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>كلمة السر</FormLabel>
-                    <FormControl>
-                      <Input type="password" {...field} />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

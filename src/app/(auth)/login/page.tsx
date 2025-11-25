@@ -17,20 +17,23 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useFirebase } from "@/firebase/provider";
+import { useFirebase, useFirestore } from "@/firebase/provider";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import type { Employee } from '@/lib/types';
+
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { auth } = useFirebase(); // Get the auth instance
+  const { auth, firestore } = useFirebase(); // Get the auth instance
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
 
-    if (!auth) {
+    if (!auth || !firestore) {
       toast({
         variant: "destructive",
         title: "خطأ",
@@ -41,10 +44,10 @@ export default function LoginPage() {
     }
     
     const formData = new FormData(event.target as HTMLFormElement);
-    const email = formData.get("email") as string;
+    const employeeId = formData.get("employeeId") as string;
     const password = formData.get("password") as string;
 
-    if (email === 'admin' && password === '123456') {
+    if (employeeId === 'admin' && password === '123456') {
        // Simulate Super Admin Login
         toast({
             title: "تم تسجيل الدخول بنجاح",
@@ -55,6 +58,24 @@ export default function LoginPage() {
     }
 
     try {
+        // 1. Find the employee by employeeId
+        const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            throw new Error("auth/user-not-found");
+        }
+
+        // 2. Get the user's email from the doc
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = employeeDoc.data() as Employee;
+        const email = (employeeData as any).email; // The email is stored in the doc
+
+        if (!email) {
+            throw new Error("auth/invalid-credential");
+        }
+        
+      // 3. Sign in with the retrieved email and provided password
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged in the provider will handle the user state.
       toast({
@@ -64,9 +85,9 @@ export default function LoginPage() {
       router.push('/splash');
     } catch (error: any) {
       console.error("Login Error:", error);
-      let description = "فشل تسجيل الدخول. يرجى التحقق من البريد الإلكتروني وكلمة المرور.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        description = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+      let description = "فشل تسجيل الدخول. يرجى التحقق من رقم الموظف وكلمة المرور.";
+      if (error.message === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        description = "رقم الموظف أو كلمة المرور غير صحيحة.";
       }
       toast({
         variant: "destructive",
@@ -94,13 +115,13 @@ export default function LoginPage() {
             <CardHeader className="text-center">
                 <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
                 <CardDescription>
-                أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى حسابك
+                أدخل رقم الموظف وكلمة المرور للوصول إلى حسابك
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
-                <Label htmlFor="email">البريد الإلكتروني</Label>
-                <Input id="email" name="email" type="email" placeholder="example@company.com" required />
+                <Label htmlFor="employeeId">رقم الموظف</Label>
+                <Input id="employeeId" name="employeeId" type="text" placeholder="E001" required />
                 </div>
                 <div className="space-y-2">
                 <Label htmlFor="password">كلمة المرور</Label>
