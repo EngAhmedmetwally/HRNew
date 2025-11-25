@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Search } from "lucide-react";
+import { Bell, ChevronDown, Search, Building } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,14 +12,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { findImage } from "@/lib/placeholder-images";
+import Link from 'next/link';
 
 export function Header() {
   const userAvatar = findImage("avatar6");
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="md:hidden" />
-        <h1 className="text-lg font-semibold md:text-xl">لوحة التحكم</h1>
+         <div className="hidden md:block">
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+                <Building className="h-6 w-6" />
+                <span>HR Pulse</span>
+            </Link>
+         </div>
       </div>
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
         <form className="ml-auto flex-1 sm:flex-initial">
