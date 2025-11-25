@@ -24,8 +24,8 @@ import { PlusCircle, Pencil } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
+  TooltipProvider,
 } from "@/components/ui/tooltip";
 
 
@@ -37,6 +37,7 @@ const statusMap = {
 
 export default function EmployeesPage() {
   return (
+    <TooltipProvider>
       <div>
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -67,6 +68,7 @@ export default function EmployeesPage() {
                   <TableHead>رقم الموظف</TableHead>
                   <TableHead>القسم</TableHead>
                   <TableHead>المنصب الوظيفي</TableHead>
+
                   <TableHead>الحالة</TableHead>
                   <TableHead>الإجراءات</TableHead>
                 </TableRow>
@@ -110,9 +112,9 @@ export default function EmployeesPage() {
                 ))}
               </TableBody>
             </Table>
-          </Card>
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+      </div>
+    </TooltipProvider>
   );
 }
