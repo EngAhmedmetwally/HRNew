@@ -36,6 +36,9 @@ export default function SettingsPage() {
     checkOutTime: '17:00',
     qrRefreshRate: 60,
     gracePeriod: 15,
+    locationLat: '24.7136',
+    locationLng: '46.6753',
+    allowedRadius: 500,
   });
 
   const [deductionLevels, setDeductionLevels] = useState<DeductionLevel[]>([
@@ -85,7 +88,7 @@ export default function SettingsPage() {
     switch (type) {
       case 'minutes': return 'دقيقة';
       case 'hours': return 'ساعة';
-      case 'amount': return 'ريال';
+      case 'amount': return 'جنيه';
     }
   }
 
@@ -133,9 +136,9 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>إعدادات QR Code</CardTitle>
+              <CardTitle>إعدادات QR Code والموقع</CardTitle>
               <CardDescription>
-                تكوين سلوك رمز الاستجابة السريعة للحضور.
+                تكوين سلوك رمز الاستجابة السريعة وتحديد الموقع.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -150,6 +153,43 @@ export default function SettingsPage() {
                   value={settings.qrRefreshRate}
                   onChange={handleInputChange}
                   min="10"
+                />
+              </div>
+               <div className='grid grid-cols-2 gap-4'>
+                <div className="space-y-2">
+                    <Label htmlFor="locationLat">خط العرض</Label>
+                    <Input
+                      id="locationLat"
+                      name="locationLat"
+                      type="text"
+                      value={settings.locationLat}
+                      onChange={handleInputChange}
+                      placeholder="e.g., 24.7136"
+                    />
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="locationLng">خط الطول</Label>
+                    <Input
+                      id="locationLng"
+                      name="locationLng"
+                      type="text"
+                      value={settings.locationLng}
+                      onChange={handleInputChange}
+                      placeholder="e.g., 46.6753"
+                    />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="allowedRadius">
+                  النطاق المسموح به (بالمتر)
+                </Label>
+                <Input
+                  id="allowedRadius"
+                  name="allowedRadius"
+                  type="number"
+                  value={settings.allowedRadius}
+                  onChange={handleInputChange}
+                  min="50"
                 />
               </div>
             </CardContent>

@@ -207,7 +207,7 @@ export default function EditEmployeePage() {
                 name="salary"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>الراتب (SAR)</FormLabel>
+                    <FormLabel>الراتب (EGP)</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="مثال: 5000" {...field} />
                     </FormControl>

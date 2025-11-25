@@ -34,7 +34,7 @@ const prompt = ai.definePrompt({
   name: 'attendanceAnomalyPrompt',
   input: {schema: AttendanceAnomalyInputSchema},
   output: {schema: AttendanceAnomalyOutputSchema},
-  prompt: `You are an HR expert specializing in detecting attendance anomalies. The main work location is at coordinates (24.7136, 46.6753).
+  prompt: `You are an HR expert specializing in detecting attendance anomalies. The main work location and allowed radius are configured in the system settings.
 
 You will be provided with the employee ID, clock-in time, clock-out time, location (optional), and attendance history of an employee.
 
@@ -43,7 +43,7 @@ Your task is to determine if the current attendance record is an anomaly based o
 Consider the following factors when determining if an anomaly exists:
 
 - Unusual clock-in/out times compared to the employee's historical attendance.
-- **Suspicious locations: Anomaly if the location is provided and is more than 500 meters away from the main work location (24.7136, 46.6753).**
+- **Suspicious locations: Anomaly if the employee's location is provided and is outside the allowed radius from the main work location configured in the settings.**
 - Inconsistencies in the attendance record.
 
 Respond with whether the record is an anomaly or not.

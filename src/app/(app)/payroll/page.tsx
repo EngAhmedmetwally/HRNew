@@ -27,7 +27,7 @@ const statusMap = {
 
 export default function PayrollPage() {
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'SAR' }).format(amount);
+    return new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP' }).format(amount);
   };
 
   return (
