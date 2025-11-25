@@ -22,14 +22,15 @@ rules_version = '2';
  * @structure
  * Data Structure: Data is organized into top-level collections.
  * - /employees/{employeeId}: Core employee profiles.
- * - /workDays & /payrolls: Employee-specific data, logically partitioned by date and keyed by employeeId in the path for direct ownership checks.
+ * - /workDays: All employee attendance data, keyed by a unique workDayId. Ownership is checked via the `employeeId` field in the document.
+ * - /payrolls: Employee-specific data, logically partitioned by date and keyed by employeeId in the path for direct ownership checks.
  * - /deductionPolicies: System-wide configuration, readable by all, writable only by Admins.
  * - /roles_admin & /roles_hr: Collections that define user roles. Document existence grants the role.
  *
  * @decisions
  * Key Security Decisions:
  * - Role-Based Access: Uses `exists()` checks against role collections (/roles_admin, /roles_hr) for performant and clear permissioning.
- * - Strict Ownership: An employee's access to their own data is enforced using the `employeeId` in the document path, assuming it matches their authentication UID.
+ * - Strict Ownership: An employee's access to their own data is enforced using the `employeeId` in the document path or field, assuming it matches their authentication UID.
  * - Segregated Listing: To prevent data leaks, `list` operations on collections containing mixed private data (like attendance or payroll) are restricted to Admin/HR roles. Employees can only `get` their specific documents by their known ID.
  * - Immutable Ownership Links: Once an employee-specific record (like a payroll or workday) is created, its link to the employee (the `employeeId` field) cannot be changed.
  * - Default Deny: All operations are denied by default unless explicitly allowed. Unauthenticated access is completely blocked.
@@ -102,22 +103,23 @@ service cloud.firestore {
     }
 
     /**
-     * @description Stores daily attendance records. Employees can create their own records (e.g., via QR scan)
-     *   and read their own history. HR and Admins have full control.
-     * @path /workDays/{year}/{month}/{day}/{employeeId}
-     * @allow (get) An employee 'emp123' reads their attendance for a specific day.
-     * @allow (create) An employee 'emp123' creates their own attendance record.
-     * @deny (update) An employee 'emp123' tries to modify a past attendance record.
-     * @deny (list) An employee tries to list all attendance for a given day, which would include other employees.
-     * @principle Restricts access to a user's own data tree and allows self-creation of records.
+     * @description Stores daily attendance records in a single collection. Employees can create and read their own records.
+     * HR and Admins have full control. Listing is restricted to HR/Admin roles.
+     * @path /workDays/{workDayId}
+     * @allow (get) An employee reads their own attendance for a specific day.
+     * @allow (create) An employee creates their own attendance record.
+     * @deny (update) An employee tries to modify a past attendance record.
+     * @deny (list) An employee tries to list all attendance for a given day.
+     * @principle Restricts access to a user's own data and allows self-creation of records.
      */
-    match /workDays/{year}/{month}/{day}/{employeeId} {
-      allow get: if isOwner(employeeId) || isHrOrAdmin();
+    match /workDays/{workDayId} {
+      allow get: if isHrOrAdmin() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
       allow list: if isHrOrAdmin();
-      allow create: if (isOwner(employeeId) && request.resource.data.employeeId == employeeId) || isHrOrAdmin();
-      allow update: if isHrOrAdmin() && resource != null && request.resource.data.employeeId == resource.data.employeeId;
-      allow delete: if isHrOrAdmin() && resource != null;
+      allow create: if isHrOrAdmin() || (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
+      allow update: if isHrOrAdmin() && request.resource.data.employeeId == resource.data.employeeId;
+      allow delete: if isHrOrAdmin();
     }
+
 
     /**
      * @description Manages global deduction policies for delays, absences, etc.
@@ -161,12 +163,9 @@ service cloud.firestore {
      * @principle Restricts access to internal, process-specific data to authorized roles only.
      */
     match /qrCodes/{qrCodeId} {
-      allow get: if isHrOrAdmin();
-      allow list: if isHrOrAdmin();
-      allow create: if isHrOrAdmin();
-      allow update: if isHrOrAdmin() && resource != null;
-      allow delete: if isHrOrAdmin() && resource != null;
+      allow get, list, create, update, delete: if isHrOrAdmin();
     }
+
 
     /**
      * @description Defines which users are Admins. Only other Admins can manage this list.
@@ -176,12 +175,9 @@ service cloud.firestore {
      * @principle Secures role-granting authority to the highest privilege level (self-management).
      */
     match /roles_admin/{uid} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list, create, update, delete: if isAdmin();
     }
+
 
     /**
      * @description Defines which users are HR personnel. Only Admins can manage this list to

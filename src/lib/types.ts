@@ -1,4 +1,5 @@
 import type { ImagePlaceholder } from './placeholder-images';
+import type { Timestamp } from 'firebase/firestore';
 
 export interface Employee {
   id: string; // Corresponds to Firebase Auth UID
@@ -33,4 +34,15 @@ export interface Payroll {
   deductions: number;
   netSalary: number;
   status: 'paid' | 'pending';
+}
+
+export interface WorkDay {
+    id: string;
+    date: Timestamp;
+    employeeId: string;
+    checkInTime: Timestamp;
+    checkOutTime: Timestamp | null;
+    totalWorkHours: number;
+    delayMinutes: number;
+    overtimeHours: number;
 }
