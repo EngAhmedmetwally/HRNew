@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -22,19 +22,12 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Save, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { Switch } from '@/components/ui/switch';
 
 const screens = [
   { id: 'dashboard', label: 'لوحة التحكم' },
@@ -57,6 +50,7 @@ const employeeFormSchema = z.object({
   permissions: z.array(z.string()).refine((value) => value.some((item) => item), {
     message: 'يجب أن تختار صلاحية واحدة على الأقل.',
   }),
+  deviceVerificationEnabled: z.boolean().default(false),
 }).refine(data => {
     if (data.attendanceType === 'custom') {
         return !!data.checkInTime && !!data.checkOutTime;
@@ -81,6 +75,7 @@ export default function NewEmployeePage() {
       salary: 0,
       attendanceType: 'general',
       permissions: [],
+      deviceVerificationEnabled: false,
     },
   });
 
@@ -207,6 +202,28 @@ export default function NewEmployeePage() {
                       </RadioGroup>
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="deviceVerificationEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        تفعيل التحقق من الجهاز
+                      </FormLabel>
+                      <FormDescription>
+                        هل يتطلب من الموظف تسجيل الدخول من جهاز معين؟
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />
@@ -354,3 +371,4 @@ export default function NewEmployeePage() {
     </>
   );
 }
+    

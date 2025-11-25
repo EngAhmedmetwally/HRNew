@@ -42,6 +42,14 @@
         "baseSalary": {
           "type": "number",
           "description": "Base salary of the employee."
+        },
+        "deviceVerificationEnabled": {
+          "type": "boolean",
+          "description": "Whether to enforce device ID verification for this employee."
+        },
+        "deviceId": {
+            "type": "string",
+            "description": "The unique device ID registered for this employee."
         }
       },
       "required": [
@@ -416,3 +424,4 @@
     "reasoning": "The Firestore structure is designed to automate HR operations with a focus on attendance tracking and payroll management. The design prioritizes authorization independence and follows the DBAC principle, storing roles implicitly based on collection membership. The structure uses path-based ownership for user-related data (employees) and denormalization where needed to avoid `get()` calls in security rules.\n\n*   **/employees/{employeeId}**: Stores employee information. Used path-based ownership which simplifies security rules related to employee-specific data. Employee IDs are used for secure access to their own records.\n*   **/workDays/{year}/{month}/{day}/{employeeId}**: Stores daily attendance data for each employee. The path includes the date components (year, month, day) to optimize querying attendance records for a specific day. Segregating attendance data by date facilitates efficient report generation.\n*   **/deductionPolicies/{deductionPolicyId}**: Stores deduction policies. The lack of inherent user relationships here suggests a global scope, meaning the DBAC (database-enforced access control) approach can be applied by granting access through collection existence checks (e.g., `/roles_admin/{uid}`).\n*   **/payrolls/{year}/{month}/{employeeId}**: Stores payroll records for each employee per month. Path-based ownership based on employee ID ensures that only the employee or authorized personnel (determined through roles) can access payroll information.\n*   **/qrCodes/{qrCodeId}**: Stores QR code data for attendance tracking. Data includes session ID, date, type, token, and validity period. The security model prevents fake attendance by linking the QR code to a specific session and employee, enforced by Firebase Security Rules. Each QR code is valid for a short duration.\n*   **/roles_admin/{uid}**: Collection used to store admin roles. Document existence determines admin privileges.\n*   **/roles_hr/{uid}**: Collection used to store HR roles. Document existence determines HR privileges.\n\nThis structure provides Authorization Independence by denormalizing authorization context. For example, access to an employee's `workDays` or `payrolls` is determined by the employee ID in the path, not by fetching data from the parent `employee` document. This eliminates the need for `get()` calls in security rules.\n\nThe structure also supports the required QAPs:\n\n*   **Secure List Operations:** Segregation of data into collections with homogeneous security postures enables secure `list` operations. For example, listing all employees is secure because all documents in the `/employees` collection have the same access control requirements.\n*   **Role-Based Access Control:** Roles are managed using dedicated collections (`roles_admin`, `roles_hr`). The security rules can check for the existence of a document in these collections to grant access to sensitive operations."
   }
 }
+    
