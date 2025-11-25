@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 
 export default function QrCodePage() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [countdown, setCountdown] = useState(60);
+  const [countdown, setCountdown] = useState(5);
 
   const generateQrCode = () => {
     const timestamp = Date.now();
@@ -20,12 +20,12 @@ export default function QrCodePage() {
     const dataToEncode = `${timestamp}-${secret}`;
     const newQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(dataToEncode)}`;
     setQrCodeUrl(newQrCodeUrl);
-    setCountdown(60);
+    setCountdown(5);
   };
 
   useEffect(() => {
     generateQrCode();
-    const interval = setInterval(generateQrCode, 60000); // Generate new QR code every 60 seconds
+    const interval = setInterval(generateQrCode, 5000); // Generate new QR code every 5 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -43,7 +43,7 @@ export default function QrCodePage() {
           <CardHeader className="text-center">
             <CardTitle>إنشاء QR Code للحضور</CardTitle>
             <CardDescription>
-              يتم تحديث الكود تلقائيًا كل 60 ثانية.
+              يتم تحديث الكود تلقائيًا كل 5 ثوانٍ.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center text-center">
