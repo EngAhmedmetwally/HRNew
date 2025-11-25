@@ -11,9 +11,22 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Save } from 'lucide-react';
+import { Save, PlusCircle, Trash2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface DeductionLevel {
+  id: string;
+  minutes: number;
+  deductionType: 'minutes' | 'hours' | 'amount';
+  deductionValue: number;
+}
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -22,33 +35,59 @@ export default function SettingsPage() {
     checkInTime: '09:00',
     checkOutTime: '17:00',
     qrRefreshRate: 60,
-    latePolicy: {
-      gracePeriod: 15,
-      deductionPerMinute: 1,
-    },
+    gracePeriod: 15,
   });
+
+  const [deductionLevels, setDeductionLevels] = useState<DeductionLevel[]>([
+      { id: '1', minutes: 30, deductionType: 'minutes', deductionValue: 30 },
+      { id: '2', minutes: 60, deductionType: 'hours', deductionValue: 1 },
+  ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setSettings((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePolicyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setSettings((prev) => ({
-      ...prev,
-      latePolicy: { ...prev.latePolicy, [name]: parseInt(value, 10) },
-    }));
+  const handleLevelChange = (id: string, field: keyof Omit<DeductionLevel, 'id' | 'deductionType'>, value: string | number) => {
+    setDeductionLevels(levels => levels.map(level => 
+      level.id === id ? { ...level, [field]: Number(value) } : level
+    ));
+  };
+
+  const handleLevelTypeChange = (id: string, value: 'minutes' | 'hours' | 'amount') => {
+      setDeductionLevels(levels => levels.map(level =>
+          level.id === id ? { ...level, deductionType: value } : level
+      ));
+  };
+
+  const addLevel = () => {
+    setDeductionLevels(levels => [
+      ...levels,
+      { id: Date.now().toString(), minutes: 0, deductionType: 'minutes', deductionValue: 0 }
+    ]);
+  };
+
+  const removeLevel = (id: string) => {
+    setDeductionLevels(levels => levels.filter(level => level.id !== id));
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     // In a real app, you would save these settings to a database.
+    console.log({ settings, deductionLevels });
     toast({
       title: 'تم حفظ الإعدادات',
       description: 'تم تحديث إعدادات النظام بنجاح.',
     });
   };
+
+  const getDeductionUnit = (type: 'minutes' | 'hours' | 'amount') => {
+    switch (type) {
+      case 'minutes': return 'دقيقة';
+      case 'hours': return 'ساعة';
+      case 'amount': return 'ريال';
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -120,43 +159,78 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>لائحة التأخير</CardTitle>
               <CardDescription>
-                إعداد قواعد الخصم بناءً على دقائق التأخير.
+                إعداد قواعد الخصم بناءً على دقائق التأخير بعد فترة السماح.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-               <div className="grid gap-4 sm:grid-cols-2">
-                 <div className="space-y-2">
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
                     <Label htmlFor="gracePeriod">فترة السماح (بالدقائق)</Label>
                     <Input
                       id="gracePeriod"
                       name="gracePeriod"
                       type="number"
-                      value={settings.latePolicy.gracePeriod}
-                      onChange={handlePolicyChange}
+                      value={settings.gracePeriod}
+                      onChange={(e) => setSettings(prev => ({...prev, gracePeriod: parseInt(e.target.value, 10)}))}
                       min="0"
                     />
                      <p className="text-xs text-muted-foreground">
                         عدد الدقائق المسموح بها قبل بدء حساب التأخير.
                     </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="deductionPerMinute">
-                      قيمة الخصم لكل دقيقة تأخير (SAR)
-                    </Label>
-                    <Input
-                      id="deductionPerMinute"
-                      name="deductionPerMinute"
-                      type="number"
-                      value={settings.latePolicy.deductionPerMinute}
-                      onChange={handlePolicyChange}
-                      min="0"
-                      step="0.1"
-                    />
-                     <p className="text-xs text-muted-foreground">
-                        المبلغ الذي يتم خصمه عن كل دقيقة تأخير بعد فترة السماح.
-                    </p>
-                  </div>
-               </div>
+                </div>
+                
+                <div className="space-y-4">
+                    <Label>مستويات الخصم</Label>
+                    {deductionLevels.map((level, index) => (
+                        <div key={level.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border rounded-md items-end">
+                            <div className="space-y-2">
+                                <Label htmlFor={`minutes-${level.id}`} className="text-xs">بعد (كم دقيقة تأخير)</Label>
+                                <Input 
+                                    id={`minutes-${level.id}`}
+                                    type="number"
+                                    value={level.minutes}
+                                    onChange={(e) => handleLevelChange(level.id, 'minutes', e.target.value)}
+                                    placeholder="مثال: 30"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor={`deductionType-${level.id}`} className="text-xs">نوع الخصم</Label>
+                                 <Select
+                                    value={level.deductionType}
+                                    onValueChange={(value: 'minutes' | 'hours' | 'amount') => handleLevelTypeChange(level.id, value)}
+                                >
+                                    <SelectTrigger id={`deductionType-${level.id}`}>
+                                        <SelectValue placeholder="اختر النوع" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="minutes">دقائق</SelectItem>
+                                        <SelectItem value="hours">ساعات</SelectItem>
+                                        <SelectItem value="amount">مبلغ</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor={`deductionValue-${level.id}`} className="text-xs">قيمة الخصم ({getDeductionUnit(level.deductionType)})</Label>
+                                <Input 
+                                    id={`deductionValue-${level.id}`}
+                                    type="number"
+                                    value={level.deductionValue}
+                                    onChange={(e) => handleLevelChange(level.id, 'deductionValue', e.target.value)}
+                                    placeholder="القيمة"
+                                />
+                            </div>
+                            <div>
+                                <Button variant="destructive" size="icon" onClick={() => removeLevel(level.id)} type="button">
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">إزالة المستوى</span>
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                     <Button variant="outline" size="sm" onClick={addLevel} type="button">
+                        <PlusCircle className="ml-2 h-4 w-4" />
+                        إضافة مستوى خصم جديد
+                    </Button>
+                </div>
             </CardContent>
           </Card>
         </div>
