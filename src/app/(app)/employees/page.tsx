@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,9 +36,11 @@ export default function EmployeesPage() {
             عرض وتعديل بيانات الموظفين في النظام.
           </p>
         </div>
-        <Button>
-          <PlusCircle className="ml-2 h-4 w-4" />
-          إضافة موظف جديد
+        <Button asChild>
+          <Link href="/employees/new">
+            <PlusCircle className="ml-2 h-4 w-4" />
+            إضافة موظف جديد
+          </Link>
         </Button>
       </div>
       <Card>
