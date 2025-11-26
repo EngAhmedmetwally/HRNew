@@ -329,7 +329,7 @@ export default function ScanPage() {
                   <div className="flex items-center gap-2">
                       <Fingerprint className="h-4 w-4" />
                       <p className="font-mono break-all">
-                         <span className="font-semibold text-foreground">Device:</span> {employeeData.deviceId}
+                         <span className="font-semibold text-foreground">Device ID:</span> {employeeData.deviceId}
                       </p>
                   </div>
                )}
@@ -362,3 +362,5 @@ export default function ScanPage() {
     </Card>
   );
 }
+
+    
