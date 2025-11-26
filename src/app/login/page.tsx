@@ -31,14 +31,15 @@ export default function LoginPage() {
   const { user, roles, isUserLoading } = useUser();
 
    useEffect(() => {
-    // This effect now handles all redirection logic post-login.
-    // It waits until the user state and roles are confirmed.
-    if (!isUserLoading && user) {
+    if (!isUserLoading) {
+      if (user) {
         if (roles.isAdmin || roles.isHr) {
-            router.replace('/dashboard');
+          router.replace('/dashboard');
         } else {
-            router.replace('/scan');
+          router.replace('/scan');
         }
+      }
+      // If user is not logged in, do nothing, just show the login page.
     }
   }, [user, roles, isUserLoading, router]);
 
@@ -61,18 +62,16 @@ export default function LoginPage() {
     const password = formData.get("password") as string;
 
     try {
-        let authSuccessful = false;
         if (employeeId === 'admin' && password === '123456') {
             const adminEmail = 'admin@hr-pulse.system';
             try {
                 await signInWithEmailAndPassword(auth, adminEmail, password);
-                authSuccessful = true;
             } catch (error: any) {
                 if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                    // This creates the super admin user if they don't exist on first login
                     await createUserWithEmailAndPassword(auth, adminEmail, password);
-                    authSuccessful = true;
                 } else {
-                    throw error;
+                    throw error; // Rethrow other errors
                 }
             }
         } else {
@@ -91,17 +90,15 @@ export default function LoginPage() {
                 throw new Error("auth/invalid-credential");
             }
             await signInWithEmailAndPassword(auth, email, password);
-            authSuccessful = true;
         }
 
-        if (authSuccessful) {
-             toast({
-                title: "تم تسجيل الدخول بنجاح",
-                description: "جاري توجيهك...",
-             });
-             // ALWAYS redirect to splash page. The useEffect will handle the final destination.
-             router.replace('/splash');
-        }
+        toast({
+            title: "تم تسجيل الدخول بنجاح",
+            description: "جاري توجيهك...",
+        });
+        // Redirecting is now handled by the useEffect hook based on user state
+        // We don't need router.replace('/splash') here anymore if useEffect handles it
+        // The onAuthStateChanged will trigger the user state update, which then triggers the redirection effect.
 
     } catch (error: any) {
       console.error("Login Error:", error);
@@ -112,18 +109,19 @@ export default function LoginPage() {
        if (error.code === 'auth/invalid-email') {
         description = "حساب المدير الخارق غير موجود. يرجى التأكد من تشغيل الإعداد الأولي.";
       }
+       if (error.code === 'auth/api-key-not-valid') {
+        description = "مفتاح API الخاص بـ Firebase غير صالح. يرجى الاتصال بدعم النظام.";
+      }
       toast({
         variant: "destructive",
         title: "فشل تسجيل الدخول",
         description: description,
       });
-      setIsLoading(false); // Only set loading to false on error
+      setIsLoading(false);
     }
-    // Do not set isLoading to false on success, as the page will redirect.
   };
   
-   // Show a loading state while checking for an existing session
-   if (isUserLoading) {
+   if (isUserLoading || user) {
         return (
              <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
                 <AuthBackground />
@@ -131,18 +129,7 @@ export default function LoginPage() {
                     <Building className="h-6 w-6" />
                     <span>HR Pulse</span>
                 </div>
-                <p>جاري التحقق من جلسة الدخول...</p>
-            </div>
-        )
-   }
-   
-   // If user is already logged in, the useEffect will redirect them. 
-   // While waiting for redirect, show a minimal loading state.
-   if (user) {
-        return (
-             <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
-                <AuthBackground />
-                <p>تم تسجيل الدخول. جاري التوجيه...</p>
+                <p>جاري التحميل...</p>
             </div>
         )
    }
