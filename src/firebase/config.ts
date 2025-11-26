@@ -1,8 +1,8 @@
 export const firebaseConfig = {
-  "apiKey": "AIzaSyAwC904u5g0i_9yLpC2qT1L3x_f4Y7S-Jk",
-  "authDomain": "hr-pulse-3b7c8.firebaseapp.com",
-  "projectId": "hr-pulse-3b7c8",
-  "storageBucket": "hr-pulse-3b7c8.appspot.com",
-  "messagingSenderId": "473634020353",
-  "appId": "1:473634020353:web:01168128e085499f579174"
+  apiKey: "AIzaSyDC6kydCNnO_L4V_jQqqJDP7QcZLFiChic",
+  authDomain: "studio-6032736347-72e9f.firebaseapp.com",
+  projectId: "studio-6032736347-72e9f",
+  storageBucket: "studio-6032736347-72e9f.appspot.com",
+  messagingSenderId: "450851167664",
+  appId: "1:450851167664:web:206690d0cb5760023e8a75"
 };
