@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FingerprintAnimation } from '@/components/auth/fingerprint-animation';
-import { Building } from 'lucide-react';
+import { AuthBackground } from '@/components/auth/fingerprint-animation';
+import { Building, Loader2 } from 'lucide-react';
 
 export default function SplashPage() {
   const router = useRouter();
@@ -18,15 +18,16 @@ export default function SplashPage() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
-      <div className="absolute inset-0 z-0">
-        <FingerprintAnimation />
-      </div>
+      <AuthBackground />
        <div className="z-10 flex flex-col items-center text-center">
             <div className="mb-4 flex items-center gap-2 text-2xl font-semibold text-foreground">
                 <Building className="h-8 w-8" />
                 <span>HR Pulse</span>
             </div>
-            <p className="text-muted-foreground">جاري المصادقة وتجهيز لوحة التحكم الخاصة بك...</p>
+            <div className='flex items-center gap-2 text-muted-foreground'>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <p>جاري المصادقة وتجهيز لوحة التحكم الخاصة بك...</p>
+            </div>
         </div>
     </div>
   );

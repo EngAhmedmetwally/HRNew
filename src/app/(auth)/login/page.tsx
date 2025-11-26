@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FingerprintAnimation } from "@/components/auth/fingerprint-animation";
+import { AuthBackground } from "@/components/auth/fingerprint-animation";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -101,9 +101,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
-       <div className="absolute inset-0 z-0">
-         <FingerprintAnimation />
-       </div>
+       <AuthBackground />
 
        <div className="absolute top-8 flex items-center gap-2 text-lg font-semibold text-foreground">
             <Building className="h-6 w-6" />
