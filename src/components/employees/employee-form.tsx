@@ -129,37 +129,35 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (!firestore || !auth || !auth.currentUser) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase أو أنك غير مسجل الدخول.' });
+    if (!firestore || !auth) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
         return;
     }
 
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role: newRole, password, ...employeeData } = data;
         
-        const dataToUpdate: { [key: string]: any } = {
-            ...employeeData,
-            id: employee.id,
+        // Destructure to separate role and password, which are handled differently
+        const { role: newRole, password, ...employeeDataForUpdate } = data;
+        
+        // Ensure id is present for the security rule check but employeeId is not
+        const finalDataToUpdate: Partial<EmployeeFormValues> = { 
+          ...employeeDataForUpdate,
+          id: employee.id, // Keep the original id
         };
-        delete dataToUpdate.employeeId;
+        delete finalDataToUpdate.employeeId;
 
         try {
             // Update Firestore document first
-            await updateDoc(employeeDocRef, dataToUpdate);
-
-            // Handle password update if provided
+            await updateDoc(employeeDocRef, finalDataToUpdate);
+            
+            // Handle password update if a new one is provided
             if (password && password.length >= 6) {
-                // This is a sensitive operation and might fail if the admin user hasn't
-                // re-authenticated recently. For this app, we'll assume it works.
-                // A production app would need to handle re-authentication.
-                const userToUpdate = { uid: employee.id }; // A mock user object for the function
-                // This is not a real Firebase API. In a real scenario, this would be an admin SDK call.
-                // Since we can't do that on the client, we will just show a toast.
-                // A proper implementation requires a Cloud Function.
-                console.log(`Password for user ${employee.id} would be updated to: ${password}. This requires an admin backend function.`);
-                toast({ title: 'تحديث كلمة المرور', description: 'تحديث كلمة المرور يتطلب وظيفة خلفية (Cloud Function) للتنفيذ بأمان. تم تحديث البيانات الأخرى بنجاح.' });
+              // This is a client-side limitation. A secure implementation needs a Cloud Function.
+              // We'll log it and inform the user.
+              console.warn(`Password update for user ${employee.id} requires a backend function for security.`);
+              toast({ title: 'تحديث كلمة المرور', description: 'تحديث كلمة المرور يتطلب وظيفة خلفية (Cloud Function) للتنفيذ بأمان. تم تحديث البيانات الأخرى بنجاح.' });
             }
 
             // Handle roles update
@@ -167,6 +165,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
 
+            // Always delete old roles to handle demotions correctly
             batch.delete(adminRoleRef);
             batch.delete(hrRoleRef);
 
@@ -175,7 +174,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             } else if (newRole === 'hr') {
                 batch.set(hrRoleRef, { uid: employee.id });
             }
-
+            
             await batch.commit();
             
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
@@ -187,54 +186,57 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 new FirestorePermissionError({
                     path: employeeDocRef.path,
                     operation: 'update',
-                    requestResourceData: dataToUpdate,
+                    requestResourceData: finalDataToUpdate,
                 })
             );
         }
     } else {
-        // Create new employee logic...
+        // Create new employee logic
         const employeesRef = collection(firestore, 'employees');
         const q = query(employeesRef, where("employeeId", "==", data.employeeId));
         
-        getDocs(q).then(querySnapshot => {
-             if (!querySnapshot.empty) {
-                form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
-                return;
-            }
-             // Create user in Firebase Auth
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
+            return;
+        }
+
+        try {
+            // 1. Create user in Firebase Auth
             const email = `${data.employeeId}@hr-pulse.system`;
-            createUserWithEmailAndPassword(auth, email, data.password!)
-            .then(async (userCredential) => {
-                const newAuthUid = userCredential.user.uid;
+            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password!);
+            const newAuthUid = userCredential.user.uid;
 
-                const { role, password, ...employeeData } = data;
-                
-                const employeeDoc = {
-                    ...employeeData,
-                    id: newAuthUid,
-                };
-                
-                const employeeDocRef = doc(firestore, 'employees', newAuthUid);
-                await setDoc(employeeDocRef, employeeDoc);
+            // 2. Prepare Firestore document with the correct ID
+            const { role, password, id, ...employeeData } = data;
+            const employeeDocData = {
+                ...employeeData,
+                id: newAuthUid, // CRITICAL: Use the Auth UID as the document ID
+            };
 
-                if (role === 'admin') {
-                    await setDoc(doc(firestore, 'roles_admin', newAuthUid), { uid: newAuthUid });
-                } else if (role === 'hr') {
-                    await setDoc(doc(firestore, 'roles_hr', newAuthUid), { uid: newAuthUid });
-                }
-                
-                toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
-                onFinish();
+            // 3. Set the Firestore document with the correct UID
+            const employeeDocRef = doc(firestore, 'employees', newAuthUid);
+            await setDoc(employeeDocRef, employeeDocData);
+            
+            // 4. Set roles if applicable
+            if (role === 'admin') {
+                await setDoc(doc(firestore, 'roles_admin', newAuthUid), { uid: newAuthUid });
+            } else if (role === 'hr') {
+                await setDoc(doc(firestore, 'roles_hr', newAuthUid), { uid: newAuthUid });
+            }
+            
+            toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
+            onFinish();
 
-            }).catch(error => {
-                let errorMessage = "حدث خطأ غير متوقع.";
-                if (error.code === 'auth/email-already-in-use') {
-                    errorMessage = "اسم المستخدم (رقم الموظف) مستخدم بالفعل.";
-                    form.setError('employeeId', { message: errorMessage });
-                }
-                 toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: errorMessage });
-            });
-        });
+        } catch (error: any) {
+            let errorMessage = "حدث خطأ غير متوقع.";
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = "اسم المستخدم (رقم الموظف) مستخدم بالفعل.";
+                form.setError('employeeId', { message: errorMessage });
+            }
+            console.error("Create employee failed:", error);
+            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: errorMessage });
+        }
     }
   }
 
