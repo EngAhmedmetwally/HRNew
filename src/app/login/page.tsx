@@ -66,7 +66,7 @@ export default function LoginPage() {
                 await signInWithEmailAndPassword(auth, adminEmail, password);
 
             } catch (error: any) {
-                 // If user does not exist, create it
+                 // If user does not exist, create it. Handles both error codes for robustness.
                 if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
                     await createUserWithEmailAndPassword(auth, adminEmail, password);
                     // The onAuthStateChanged listener in the provider will handle role setting
@@ -140,7 +140,7 @@ export default function LoginPage() {
 
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
        <AuthBackground />
 
        <div className="absolute top-8 flex items-center gap-2 text-lg font-semibold text-foreground">
