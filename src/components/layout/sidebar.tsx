@@ -1,33 +1,41 @@
 'use client';
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   CreditCard,
   LayoutDashboard,
   ScanLine,
   Settings,
   Users,
-  Building,
   QrCode,
   Camera,
   LogOut,
-  User,
   LucideIcon,
 } from "lucide-react";
 import {
-  Sidebar as AppSidebar,
+  Sidebar as SidebarContainer,
   SidebarContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-  SidebarGroup,
+  useSidebar
 } from "@/components/ui/sidebar";
 import { useUser, useFirebase } from "@/firebase";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "../ui/button";
 import { FingerprintIcon } from "../auth/fingerprint-icon";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { findImage } from "@/lib/placeholder-images";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 
 interface MenuItem {
     href: string;
@@ -40,15 +48,18 @@ export const menuItems: MenuItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ['admin', 'hr'] },
     { href: "/employees", icon: Users, label: "الموظفين", roles: ['admin', 'hr'] },
     { href: "/attendance", icon: ScanLine, label: "سجل الحضور", roles: ['admin', 'hr'] },
+    { href: "/payroll", icon: CreditCard, label: "الرواتب", roles: ['admin', 'hr'] },
     { href: "/attendance/qr", icon: QrCode, label: "إنشاء QR Code", roles: ['admin', 'hr'] },
     { href: "/scan", icon: Camera, label: "مسح QR", roles: ['admin', 'hr', 'employee'] },
-    { href: "/payroll", icon: CreditCard, label: "الرواتب", roles: ['admin', 'hr'] },
     { href: "/settings", icon: Settings, label: "الإعدادات", roles: ['admin'] },
 ];
 
 export function Sidebar() {
     const { auth } = useFirebase();
     const { user, roles, isUserLoading } = useUser();
+    const pathname = usePathname();
+    const { isMobile } = useSidebar();
+    const userAvatar = findImage("avatar6");
 
     const handleLogout = () => {
         auth.signOut();
@@ -56,73 +67,76 @@ export function Sidebar() {
 
     const accessibleMenuItems = menuItems.filter(item => {
         if (!user) return false;
-        
-        // If user is admin, show all menu items.
         if (roles.isAdmin) return true;
-
         if (!item.roles || item.roles.length === 0) return true;
-        
         const userRoles = new Set<string>();
         if (roles.isHr) userRoles.add('hr');
-        userRoles.add('employee'); // All authenticated users are at least employees
-        
+        userRoles.add('employee');
         return item.roles.some(requiredRole => userRoles.has(requiredRole));
     });
 
   return (
-    <AppSidebar side="right" variant="sidebar" collapsible="offcanvas" className="bg-background md:hidden">
-      <SidebarHeader className="h-16 justify-center">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <FingerprintIcon className="h-8 w-8 text-primary" />
-          <span className="font-bold text-lg text-foreground">
+    <SidebarContainer side="right" variant="sidebar" collapsible={isMobile ? "offcanvas" : "none"} className="bg-sidebar text-sidebar-foreground border-sidebar-border">
+      <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
+        <Link href="/dashboard" className="flex items-center gap-2 text-sidebar-foreground">
+          <FingerprintIcon className="h-8 w-8" />
+          <span className="font-bold text-lg">
             HighClass HR
           </span>
         </Link>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarMenu>
-            {isUserLoading ? (
-                 <>
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
-                 </>
-            ) : (
-                accessibleMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild>
-                        <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                        </Link>
-                    </SidebarMenuButton>
-                    </SidebarMenuItem>
-                ))
-            )}
-          </SidebarMenu>
-        </SidebarGroup>
+      <SidebarContent className="p-4">
+        <SidebarMenu>
+          {accessibleMenuItems.map((item) => (
+            <SidebarMenuItem key={item.href}>
+              <SidebarMenuButton
+                asChild
+                className={cn(
+                  "justify-start text-base font-normal",
+                  pathname === item.href
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "hover:bg-sidebar-accent/50"
+                )}
+              >
+                <Link href={item.href}>
+                  <item.icon className="ml-2" />
+                  <span>{item.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="p-4 border-t border-sidebar-border">
          {user && (
-            <div className="w-full flex flex-col items-center gap-2 p-2">
-                 <SidebarMenu className="w-full">
-                     <SidebarMenuItem>
-                        <SidebarMenuButton
-                            asChild
-                            onClick={handleLogout}
-                            className="bg-destructive/10 text-destructive hover:bg-destructive/20"
-                        >
-                            <a>
-                                <LogOut />
-                                <span>تسجيل الخروج</span>
-                            </a>
-                        </SidebarMenuButton>
-                     </SidebarMenuItem>
-                 </SidebarMenu>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex h-auto w-full items-center justify-between p-2 hover:bg-sidebar-accent/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt={userAvatar.description} />}
+                      <AvatarFallback>{isUserLoading ? '' : (user?.displayName?.charAt(0) || 'U')}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col items-start">
+                       <span className="text-sm font-medium text-sidebar-foreground">{user.displayName || user.email?.split('@')[0]}</span>
+                       <span className="text-xs text-muted-foreground">{roles.isAdmin ? 'مدير' : roles.isHr ? 'موارد بشرية' : 'موظف'}</span>
+                    </div>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 mb-2" side="top">
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>تسجيل الخروج</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
         )}
       </SidebarFooter>
-    </AppSidebar>
+    </SidebarContainer>
   );
 }
