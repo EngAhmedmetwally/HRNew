@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { signInAnonymously, updateProfile, signInWithEmailAndPassword } from "firebase/auth";
+import { signInAnonymously, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
@@ -81,6 +81,8 @@ export default function LoginPage() {
         } catch (error: any) {
             if (error.code === 'auth/user-not-found') {
                 await createUserWithEmailAndPassword(auth, adminEmail, password);
+                // After creating, sign in again
+                await signInWithEmailAndPassword(auth, adminEmail, password);
             } else {
                 throw error; // Re-throw other sign-in errors
             }
@@ -107,6 +109,7 @@ export default function LoginPage() {
             path: employeesRef.path,
             operation: 'list',
           }));
+          // It's crucial to re-throw the error to stop execution
           throw error;
         });
 
@@ -151,16 +154,18 @@ export default function LoginPage() {
 
 
     } catch (error: any) {
-      console.error("Login Error:", error);
-      let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
+      if (!(error instanceof FirestorePermissionError)) {
+          console.error("Login Error:", error);
+          let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
+          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
+          }
+          toast({
+            variant: "destructive",
+            title: "فشل تسجيل الدخول",
+            description: description,
+          });
       }
-      toast({
-        variant: "destructive",
-        title: "فشل تسجيل الدخول",
-        description: description,
-      });
     } finally {
       setIsLoading(false);
     }
