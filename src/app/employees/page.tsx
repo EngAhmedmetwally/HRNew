@@ -108,27 +108,27 @@ export default function EmployeesPage() {
                  <Table>
                     <TableHeader>
                         <TableRow>
-                          <TableHead>اسم الموظف</TableHead>
-                          <TableHead className="hidden sm:table-cell">رقم الموظف</TableHead>
-                          <TableHead className="hidden md:table-cell">المنصب الوظيفي</TableHead>
-                          <TableHead>الحالة</TableHead>
+                          <TableHead className="text-right">اسم الموظف</TableHead>
+                          <TableHead className="hidden sm:table-cell text-right">رقم الموظف</TableHead>
+                          <TableHead className="hidden md:table-cell text-right">المنصب الوظيفي</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {employees.map((employee) => (
                         <TableRow key={employee.id} className="hover:bg-muted/50">
                             <TableCell>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-end gap-3">
+                                <Link href={`/employees/${employee.id}/edit`} className="font-medium hover:underline text-right">{employee.name}</Link>
                                 <Avatar className="h-10 w-10">
                                 <AvatarImage src={findImage(`avatar${(parseInt(employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
                                 <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
                                 </Avatar>
-                                <Link href={`/employees/${employee.id}/edit`} className="font-medium hover:underline">{employee.name}</Link>
                             </div>
                             </TableCell>
-                            <TableCell className="hidden sm:table-cell">{employee.employeeId}</TableCell>
-                            <TableCell className="hidden md:table-cell">{employee.jobTitle}</TableCell>
-                            <TableCell>
+                            <TableCell className="hidden sm:table-cell text-right">{employee.employeeId}</TableCell>
+                            <TableCell className="hidden md:table-cell text-right">{employee.jobTitle}</TableCell>
+                            <TableCell className="text-right">
                               <Badge variant={statusMap[employee.status]?.variant as any} className={statusMap[employee.status]?.className}>
                                   {statusMap[employee.status]?.text}
                               </Badge>

@@ -28,7 +28,7 @@ import { Save, ArrowRight, RotateCw, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, notFound, useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
-import { useDoc, useFirebase, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import {
@@ -117,17 +117,17 @@ export default function EditEmployeePage() {
 
     const { role, ...employeeData } = data;
 
-    // Use setDoc with merge to update the main employee document
-    setDocumentNonBlocking(employeeDocRef, employeeData, { merge: true });
-
-    // --- Securely and correctly update roles ---
-    const adminRoleRef = doc(firestore, 'roles_admin', employeeId);
-    const hrRoleRef = doc(firestore, 'roles_hr', employeeId);
-
     try {
+        // Use setDoc with merge to update the main employee document and wait for it
+        await setDoc(employeeDocRef, employeeData, { merge: true });
+
+        // --- Securely and correctly update roles ---
+        const adminRoleRef = doc(firestore, 'roles_admin', employeeId);
+        const hrRoleRef = doc(firestore, 'roles_hr', employeeId);
+
         // Remove user from all possible role collections to handle demotions/changes.
-        await deleteDoc(adminRoleRef);
-        await deleteDoc(hrRoleRef);
+        // These can run in parallel.
+        await Promise.all([deleteDoc(adminRoleRef), deleteDoc(hrRoleRef)]);
 
         // Then, add to the correct role collection if they are not a standard employee.
         if (role === 'admin') {
@@ -142,12 +142,12 @@ export default function EditEmployeePage() {
         });
         router.push('/employees');
 
-    } catch (error) {
-        console.error("Error updating roles:", error);
+    } catch (error: any) {
+        console.error("Error updating employee or roles:", error);
         toast({
             variant: "destructive",
-            title: 'فشل تحديث الصلاحيات',
-            description: 'حدث خطأ أثناء تحديث صلاحيات الموظف. قد تحتاج إلى التحقق من قواعد الأمان في Firestore.',
+            title: 'فشل تحديث البيانات',
+            description: 'حدث خطأ أثناء تحديث بيانات أو صلاحيات الموظف. قد تحتاج إلى التحقق من قواعد الأمان في Firestore.',
         });
     }
 }
@@ -193,189 +193,191 @@ export default function EditEmployeePage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>المعلومات الأساسية</CardTitle>
-              <CardDescription>
-                تفاصيل الحساب الأساسية للموظف.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6 grid-cols-1">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>الاسم الكامل</FormLabel>
-                    <FormControl>
-                      <Input placeholder="مثال: أحمد علي" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="employeeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>رقم الموظف</FormLabel>
-                    <FormControl>
-                      <Input placeholder="مثال: E001" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="jobTitle"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>المنصب الوظيفي</FormLabel>
-                    <FormControl>
-                      <Input placeholder="مثال: مهندس برمجيات" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="baseSalary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>الراتب الأساسي (EGP)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="مثال: 5000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>حالة الحساب</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        className="flex flex-wrap items-center gap-4"
-                      >
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="active" />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            نشط
-                          </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="on_leave" />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            في إجازة
-                          </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="inactive" />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            غير نشط
-                          </FormLabel>
-                        </FormItem>
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-                <CardTitle>الصلاحيات والأمان</CardTitle>
+          <div className="flex flex-col gap-8">
+            <Card>
+                <CardHeader>
+                <CardTitle>المعلومات الأساسية</CardTitle>
                 <CardDescription>
-                    إدارة صلاحيات الوصول وإعدادات الأمان الخاصة بالموظف.
+                    تفاصيل الحساب الأساسية للموظف.
                 </CardDescription>
-            </CardHeader>
-            <CardContent className='grid gap-6 grid-cols-1'>
-                 <FormField
+                </CardHeader>
+                <CardContent className="grid gap-6 grid-cols-1">
+                <FormField
                     control={form.control}
-                    name="role"
+                    name="name"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>الصلاحية</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <FormLabel>الاسم الكامل</FormLabel>
                         <FormControl>
-                            <SelectTrigger>
-                            <SelectValue placeholder="اختر صلاحية للموظف" />
-                            </SelectTrigger>
+                        <Input placeholder="مثال: أحمد علي" {...field} />
                         </FormControl>
-                        <SelectContent>
-                            <SelectItem value="employee">موظف</SelectItem>
-                            <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
-                            <SelectItem value="admin">مدير نظام</SelectItem>
-                        </SelectContent>
-                        </Select>
                         <FormMessage />
                     </FormItem>
                     )}
                 />
                 <FormField
-                control={form.control}
-                name="deviceVerificationEnabled"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">
-                        تفعيل التحقق من الجهاز
-                      </FormLabel>
-                      <FormDescription>
-                        هل يتطلب من الموظف تسجيل الدخول من جهاز معين؟
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              {deviceVerificationEnabled && (
-                <FormField
                     control={form.control}
-                    name="deviceId"
+                    name="employeeId"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>معرف الجهاز المسجل</FormLabel>
-                        <div className="flex flex-col sm:flex-row gap-2">
+                        <FormLabel>رقم الموظف</FormLabel>
                         <FormControl>
-                            <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" />
+                        <Input placeholder="مثال: E001" {...field} />
                         </FormControl>
-                        <Button type="button" variant="secondary" onClick={handleResetDeviceId} disabled={!field.value}>
-                            <RotateCw className="ml-2 h-4 w-4" />
-                            إعادة تعيين
-                        </Button>
-                        </div>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="jobTitle"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>المنصب الوظيفي</FormLabel>
+                        <FormControl>
+                        <Input placeholder="مثال: مهندس برمجيات" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="baseSalary"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>الراتب الأساسي (EGP)</FormLabel>
+                        <FormControl>
+                        <Input type="number" placeholder="مثال: 5000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                    <FormItem className="space-y-3">
+                        <FormLabel>حالة الحساب</FormLabel>
+                        <FormControl>
+                        <RadioGroup
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            className="flex flex-wrap items-center gap-4"
+                        >
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                                <RadioGroupItem value="active" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                                نشط
+                            </FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                                <RadioGroupItem value="on_leave" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                                في إجازة
+                            </FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl>
+                                <RadioGroupItem value="inactive" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                                غير نشط
+                            </FormLabel>
+                            </FormItem>
+                        </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>الصلاحيات والأمان</CardTitle>
+                    <CardDescription>
+                        إدارة صلاحيات الوصول وإعدادات الأمان الخاصة بالموظف.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className='grid gap-6 grid-cols-1'>
+                    <FormField
+                        control={form.control}
+                        name="role"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>الصلاحية</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder="اختر صلاحية للموظف" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                <SelectItem value="employee">موظف</SelectItem>
+                                <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
+                                <SelectItem value="admin">مدير نظام</SelectItem>
+                            </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                    control={form.control}
+                    name="deviceVerificationEnabled"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                        <FormLabel className="text-base">
+                            تفعيل التحقق من الجهاز
+                        </FormLabel>
                         <FormDescription>
-                         يتم تسجيل الجهاز تلقائياً عند أول عملية تسجيل دخول ناجحة بعد تفعيل الميزة أو إعادة تعيينها.
+                            هل يتطلب من الموظف تسجيل الدخول من جهاز معين؟
                         </FormDescription>
-                        <FormMessage />
+                        </div>
+                        <FormControl>
+                        <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                        </FormControl>
                     </FormItem>
                     )}
                 />
-              )}
-            </CardContent>
-          </Card>
+                {deviceVerificationEnabled && (
+                    <FormField
+                        control={form.control}
+                        name="deviceId"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>معرف الجهاز المسجل</FormLabel>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                            <FormControl>
+                                <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" />
+                            </FormControl>
+                            <Button type="button" variant="secondary" onClick={handleResetDeviceId} disabled={!field.value}>
+                                <RotateCw className="ml-2 h-4 w-4" />
+                                إعادة تعيين
+                            </Button>
+                            </div>
+                            <FormDescription>
+                            يتم تسجيل الجهاز تلقائياً عند أول عملية تسجيل دخول ناجحة بعد تفعيل الميزة أو إعادة تعيينها.
+                            </FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                )}
+                </CardContent>
+            </Card>
+          </div>
 
           <div className="flex justify-end">
             <Button type="submit" disabled={form.formState.isSubmitting}>

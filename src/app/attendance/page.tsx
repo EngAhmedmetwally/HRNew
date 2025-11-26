@@ -181,10 +181,10 @@ export default function AttendanceLogPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>الموظف</TableHead>
-                    <TableHead>وقت الحضور</TableHead>
-                    <TableHead>وقت الانصراف</TableHead>
-                    <TableHead>الحالة</TableHead>
+                    <TableHead className="text-right">الموظف</TableHead>
+                    <TableHead className="text-right">وقت الحضور</TableHead>
+                    <TableHead className="text-right">وقت الانصراف</TableHead>
+                    <TableHead className="text-right">الحالة</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -198,7 +198,8 @@ export default function AttendanceLogPage() {
                     <TableRow key={record.id}>
                       <TableCell>
                         {record.employee ? (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-end gap-3">
+                          <div className="font-medium">{record.employee.name}</div>
                           <Avatar className="h-9 w-9">
                             <AvatarImage
                               src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl}
@@ -208,19 +209,18 @@ export default function AttendanceLogPage() {
                               {record.employee.name.charAt(0)}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="font-medium">{record.employee.name}</div>
                         </div>
                          ) : (
-                            <div className="font-medium">{record.employeeId}</div>
+                            <div className="font-medium text-right">{record.employeeId}</div>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         {record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         {record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Badge
                           variant="secondary"
                           className={

@@ -129,19 +129,19 @@ export default function PaidPayrollPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>اسم الموظف</TableHead>
-                <TableHead>الراتب الصافي</TableHead>
-                <TableHead>الشهر</TableHead>
-                <TableHead>الحالة</TableHead>
+                <TableHead className="text-right">اسم الموظف</TableHead>
+                <TableHead className="text-right">الراتب الصافي</TableHead>
+                <TableHead className="text-right">الشهر</TableHead>
+                <TableHead className="text-right">الحالة</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {combinedData.map((payroll) => (
                 <TableRow key={payroll.id}>
-                  <TableCell className="font-medium">{payroll.employeeName}</TableCell>
-                  <TableCell className="font-semibold">{formatCurrency(payroll.netSalary)}</TableCell>
-                  <TableCell>{payroll.month}/{payroll.year}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-right">{payroll.employeeName}</TableCell>
+                  <TableCell className="font-semibold text-right">{formatCurrency(payroll.netSalary)}</TableCell>
+                  <TableCell className="text-right">{payroll.month}/{payroll.year}</TableCell>
+                  <TableCell className="text-right">
                     <Badge variant="secondary" className={statusMap[payroll.status].className}>
                       {statusMap[payroll.status].text}
                     </Badge>

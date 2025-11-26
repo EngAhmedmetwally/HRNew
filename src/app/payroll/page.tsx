@@ -240,23 +240,23 @@ export default function PayrollPage() {
                 <Table>
                 <TableHeader>
                     <TableRow>
-                    <TableHead>اسم الموظف</TableHead>
-                    <TableHead>الراتب الأساسي</TableHead>
-                    <TableHead>البدلات</TableHead>
-                    <TableHead>الخصومات</TableHead>
-                    <TableHead>الراتب الصافي</TableHead>
-                    <TableHead>الحالة</TableHead>
+                    <TableHead className="text-right">اسم الموظف</TableHead>
+                    <TableHead className="text-right">الراتب الأساسي</TableHead>
+                    <TableHead className="text-right">البدلات</TableHead>
+                    <TableHead className="text-right">الخصومات</TableHead>
+                    <TableHead className="text-right">الراتب الصافي</TableHead>
+                    <TableHead className="text-right">الحالة</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {combinedData.map((payroll) => (
                     <TableRow key={payroll.id}>
-                        <TableCell className="font-medium">{payroll.employeeName}</TableCell>
-                        <TableCell>{formatCurrency(payroll.baseSalary)}</TableCell>
-                        <TableCell className="text-green-600 dark:text-green-400">{formatCurrency(payroll.allowances)}</TableCell>
-                        <TableCell className="text-red-600 dark:text-red-400">{formatCurrency(payroll.deductions)}</TableCell>
-                        <TableCell className="font-semibold">{formatCurrency(payroll.netSalary)}</TableCell>
-                        <TableCell>
+                        <TableCell className="font-medium text-right">{payroll.employeeName}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(payroll.baseSalary)}</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400 text-right">{formatCurrency(payroll.allowances)}</TableCell>
+                        <TableCell className="text-red-600 dark:text-red-400 text-right">{formatCurrency(payroll.deductions)}</TableCell>
+                        <TableCell className="font-semibold text-right">{formatCurrency(payroll.netSalary)}</TableCell>
+                        <TableCell className="text-right">
                         <Badge variant="secondary" className={statusMap[payroll.status as keyof typeof statusMap].className}>
                             {statusMap[payroll.status as keyof typeof statusMap].text}
                         </Badge>
