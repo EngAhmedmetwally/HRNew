@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
@@ -121,7 +121,7 @@ export default function LoginPage() {
         });
 
         if (querySnapshot.empty) {
-            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم غير موجود." });
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
             setIsLoading(false);
             return;
         }
@@ -130,28 +130,16 @@ export default function LoginPage() {
         const employeeData = employeeDoc.data() as Employee;
         
         if (employeeData.password !== password) {
-            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "كلمة المرور غير صحيحة." });
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
             setIsLoading(false);
             return;
         }
 
-        // --- At this point, credentials are correct. Sign in the user. ---
-        
-        // We use anonymous sign-in to get a temporary user session,
-        // then we will attach the real employee ID to it.
-        // We have to sign out any existing anonymous user first.
-        if (auth.currentUser && auth.currentUser.isAnonymous) {
-            await auth.signOut();
-        }
+        // At this point, credentials are correct. "Sign in" the user by
+        // associating their session with their employee document.
+        const userCredential = await signInWithEmailAndPassword(auth, `${employeeIdInput}@hr-pulse.system`, password);
 
-        const userCredential = await signInAnonymously(auth);
-        
-        // This is a trick to associate the anonymous user with the real employee document.
-        // We are "marking" the user object with the doc id.
-        // The FirebaseProvider will see this and fetch the correct permissions.
-        (userCredential.user as any).firestoreDocId = employeeDoc.id;
-
-        // Now, perform device verification
+        // Perform device verification
         const deviceFingerprint = getDeviceFingerprint();
         if (employeeData.deviceVerificationEnabled) {
             if (!employeeData.deviceId) {
@@ -170,17 +158,20 @@ export default function LoginPage() {
             description: "جاري توجيهك...",
         });
 
-        // Refresh the page to trigger the useUser hook with the new auth state.
         // The useEffect at the top of the component will handle redirection.
         router.refresh();
 
     } catch (error: any) {
       console.error("Login Error:", error);
-      toast({
-        variant: "destructive",
-        title: "فشل تسجيل الدخول",
-        description: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
-      });
+       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+          toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+       } else {
+         toast({
+           variant: "destructive",
+           title: "فشل تسجيل الدخول",
+           description: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+         });
+       }
     } finally {
       setIsLoading(false);
     }
