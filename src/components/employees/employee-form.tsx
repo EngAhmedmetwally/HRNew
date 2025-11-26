@@ -155,6 +155,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         if (!employeeData.password) {
             delete employeeData.password; // Don't update password if it's empty
         }
+        
+        if (!employeeData.deviceId) {
+            delete (employeeData as Partial<typeof employeeData>).deviceId;
+        }
 
         try {
             await setDoc(employeeDocRef, employeeData, { merge: true });
