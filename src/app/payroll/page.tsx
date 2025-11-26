@@ -29,7 +29,7 @@ import { getYear, getMonth } from "date-fns";
 import { useRouter } from "next/navigation";
 
 
-const statusMap = {
+const statusMap: { [key in 'paid' | 'pending']: { text: string; className: string } } = {
   paid: { text: "مدفوع", className: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" },
   pending: { text: "قيد الانتظار", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400" },
 };
@@ -59,8 +59,6 @@ export default function PayrollPage() {
   const payrollsQuery = useMemoFirebase(()=>{
     if (!firestore || !canView || !dateRange?.from) return null;
     
-    // We filter by month and year of the start date. This is a simplification.
-    // A more robust solution might involve querying a date field on the payroll document.
     const fromDate = dateRange.from;
     const year = getYear(fromDate);
     const month = getMonth(fromDate) + 1; // getMonth is 0-indexed
@@ -87,7 +85,7 @@ export default function PayrollPage() {
     return payrolls.map(p => ({
       ...p,
       employeeName: employeeMap.get(p.employeeId) || 'موظف غير معروف',
-      status: 'pending' // Default status
+      status: 'pending' as 'paid' | 'pending' // Default status
     }));
   }, [payrolls, employees]);
 
@@ -215,8 +213,8 @@ export default function PayrollPage() {
                     <CardHeader className="p-4">
                         <div className="flex justify-between items-center">
                         <CardTitle className="text-lg">{payroll.employeeName}</CardTitle>
-                        <Badge variant="secondary" className={statusMap[payroll.status as keyof typeof statusMap].className}>
-                            {statusMap[payroll.status as keyof typeof statusMap].text}
+                        <Badge variant="secondary" className={statusMap[payroll.status].className}>
+                            {statusMap[payroll.status].text}
                         </Badge>
                         </div>
                     </CardHeader>
@@ -265,8 +263,8 @@ export default function PayrollPage() {
                         <TableCell className="text-red-600 dark:text-red-400 text-right">{formatCurrency(payroll.deductions)}</TableCell>
                         <TableCell className="font-semibold text-right">{formatCurrency(payroll.netSalary)}</TableCell>
                         <TableCell className="text-right">
-                        <Badge variant="secondary" className={statusMap[payroll.status as keyof typeof statusMap].className}>
-                            {statusMap[payroll.status as keyof typeof statusMap].text}
+                        <Badge variant="secondary" className={statusMap[payroll.status].className}>
+                            {statusMap[payroll.status].text}
                         </Badge>
                         </TableCell>
                     </TableRow>

@@ -26,8 +26,15 @@ import { DateRangePicker } from '@/components/shared/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { getYear, getMonth } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
-const statusMap = {
+type PaidPayroll = Payroll & { 
+    employeeName: string; 
+    status: 'paid' | 'pending';
+    _snapshot: QueryDocumentSnapshot<DocumentData>;
+};
+
+const statusMap: { [key in 'paid' | 'pending']: { text: string; className: string } } = {
   paid: { text: "مدفوع", className: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" },
   pending: { text: "قيد الانتظار", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400" },
 };
@@ -80,14 +87,14 @@ export default function PaidPayrollPage() {
 
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
-  const combinedData = useMemo(() => {
+  const combinedData: PaidPayroll[] = useMemo(() => {
     if (!payrolls || !employees) return [];
     const employeeMap = new Map(employees.map(e => [e.id, e.name]));
     // For demo, we'll manually set some as 'paid'
     return payrolls.map((p, index) => ({
       ...p,
       employeeName: employeeMap.get(p.employeeId) || 'موظف غير معروف',
-      status: index % 2 === 0 ? 'paid' : 'pending', // Mock status
+      status: (index % 2 === 0 ? 'paid' : 'pending') as 'paid' | 'pending', // Mock status
     })).filter(p => p.status === 'paid');
   }, [payrolls, employees]);
 

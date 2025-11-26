@@ -1,3 +1,5 @@
+'use client';
+
 import type { ImagePlaceholder } from './placeholder-images';
 import type { Timestamp } from 'firebase/firestore';
 
@@ -26,13 +28,13 @@ export interface AttendanceRecord {
 export interface Payroll {
   id: string;
   employeeId: string;
-  employeeName: string;
-  month: string;
+  month: number;
+  year: number;
   baseSalary: number;
   allowances: number;
   deductions: number;
   netSalary: number;
-  status: 'paid' | 'pending';
+  overtimePay: number;
 }
 
 export interface WorkDay {
