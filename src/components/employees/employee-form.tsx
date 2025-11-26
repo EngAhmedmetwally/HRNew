@@ -112,6 +112,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             form.reset({
                 ...defaultFormValues,
                 ...employee,
+                id: employee.id, // Explicitly set ID for edit mode
                 password: '', // Always clear password field for edit mode security
                 role: role as 'employee' | 'hr' | 'admin',
                 customCheckInTime: employee.customCheckInTime || '',
@@ -140,9 +141,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         
         const { role: newRole, password, employeeId, ...employeeDataForUpdate } = data;
         
+        // Ensure id is always part of the update payload for security rules
         const finalDataToUpdate: Partial<Employee> & { id: string } = {
           ...employeeDataForUpdate,
-          id: employee.id, // Ensure id is present for security rule check
+          id: employee.id,
         };
         
         try {
@@ -156,24 +158,9 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                             requestResourceData: finalDataToUpdate,
                         })
                     );
-                    // Re-throw to stop execution
                     throw error;
                 });
             
-            // Handle password update if a new one is provided
-            const currentUserForPasswordUpdate = auth.currentUser;
-            if (password && password.length >= 6 && currentUserForPasswordUpdate) {
-                // In a real app, this should be a trusted backend call.
-                // Firebase client-side SDK doesn't support changing other users' passwords.
-                // This will only work if the admin is updating their OWN password.
-                // For this project, we assume an admin might test this on their own account.
-                try {
-                    await updatePassword(currentUserForPasswordUpdate, password);
-                } catch(e) {
-                     console.warn("Password update on client-side is not secure and will likely fail without backend logic or if not updating your own password.", e);
-                }
-            }
-
             // Handle roles update
             const batch = writeBatch(firestore);
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
@@ -190,13 +177,12 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             
             await batch.commit()
                 .catch(error => {
-                     // This is a simplification. A real implementation might check which operation failed.
                      errorEmitter.emit(
                         'permission-error',
                         new FirestorePermissionError({
                             path: newRole === 'admin' ? adminRoleRef.path : hrRoleRef.path,
-                            operation: 'write',
-                            requestResourceData: { uid: employee.id }
+                            operation: 'write', // Use a generic 'write' as it could be set or delete
+                            requestResourceData: newRole !== 'employee' ? { uid: employee.id } : undefined,
                         })
                     );
                     throw error;
@@ -205,8 +191,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
-            // We don't need a generic toast here because the specific errors are already emitted.
-            // The FirebaseErrorListener will catch them.
+            // No generic toast needed, specific errors are emitted.
             console.error('Update failed:', error);
         }
     } else {
@@ -227,13 +212,13 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             const newAuthUid = userCredential.user.uid;
 
             // 2. Prepare Firestore document with the correct ID
-            const { role, password, id, ...employeeData } = data;
-            const employeeDocData: Omit<Employee, 'id'> & { id: string } = {
+            const { role, password, ...employeeData } = data;
+             const employeeDocData: Omit<Employee, 'id'> = {
                 ...employeeData,
-                id: newAuthUid,
+                // `id` field in the type is now correctly omitted as it's the doc ID
             };
 
-            // 3. Set the Firestore document with the correct UID
+            // 3. Set the Firestore document with the correct UID as the document ID
             const employeeDocRef = doc(firestore, 'employees', newAuthUid);
             await setDoc(employeeDocRef, employeeDocData)
                 .catch(error => {
@@ -242,7 +227,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                         new FirestorePermissionError({
                             path: employeeDocRef.path,
                             operation: 'create',
-                            requestResourceData: { ...employeeDocData, id: newAuthUid },
+                            requestResourceData: { ...employeeDocData, id: newAuthUid }, // Add id to payload for rule debugging
                         })
                     );
                     throw error;
@@ -271,7 +256,8 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         } catch (error: any) {
              if (error.code === 'auth/email-already-in-use') {
                 form.setError('employeeId', { message: "اسم المستخدم (رقم الموظف) مستخدم بالفعل." });
-             } else {
+             } else if (error.name !== 'FirebaseError') {
+                 // Avoid showing toast for our custom propagated errors
                  console.error("Create employee failed:", error);
                  toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
              }
@@ -564,3 +550,5 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     </Form>
   );
 }
+
+    
