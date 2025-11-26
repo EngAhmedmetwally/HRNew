@@ -27,7 +27,7 @@ import { Save, ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
-import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import {
@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { FirestorePermissionError, errorEmitter } from '@/firebase';
 
 
 const employeeFormSchema = z.object({
@@ -85,28 +86,39 @@ export default function NewEmployeePage() {
       const email = `${data.employeeId}@hr-pulse.system`;
       const { password, role, ...employeeData } = data;
 
+      // 1. Create the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
+      // 2. Prepare the employee document for Firestore
       const employeeDoc = {
         ...employeeData,
         id: user.uid,
-        email: email,
-        department: '',
+        email: email, // Storing email for potential future use
+        department: '', // Default department
       };
 
+      // 3. Save the employee document to Firestore
       const employeeDocRef = doc(firestore, 'employees', user.uid);
       await setDoc(employeeDocRef, employeeDoc);
+
+      // 4. Handle role assignment (optional, can be done later via edit page)
+      // This part is kept separate to avoid permission issues during creation
+      // For now, we just create the employee. Admin can assign roles later.
 
       toast({
         title: 'تمت إضافة الموظف بنجاح',
         description: `تم إنشاء حساب للموظف ${data.name}.`,
       });
       router.push('/employees');
+
     } catch (error: any) {
+      console.error("Employee Creation Error:", error);
       let description = "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.";
       if (error.code === 'auth/email-already-in-use') {
         description = "رقم الموظف هذا مستخدم بالفعل.";
+      } else if (error.code === 'permission-denied') {
+         description = "ليس لديك الصلاحية لإنشاء موظفين جدد. يرجى مراجعة مدير النظام.";
       }
       toast({
           variant: 'destructive',
@@ -143,7 +155,7 @@ export default function NewEmployeePage() {
                 تفاصيل الحساب الأساسية والبيانات الوظيفية للموظف.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2">
+            <CardContent className="grid gap-6 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="name"
@@ -330,7 +342,7 @@ export default function NewEmployeePage() {
                 control={form.control}
                 name="deviceVerificationEnabled"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 md:col-span-2">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">
                         تفعيل التحقق من الجهاز

@@ -141,24 +141,29 @@ export default function SettingsPage() {
   };
 
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!settingsDocRef) return;
     setIsSaving(true);
     const dataToSave = { settings, deductionLevels };
     
-    // Use setDoc with merge: true to create or update the document.
-    setDocumentNonBlocking(settingsDocRef, dataToSave, { merge: true });
-
-    // We use a timeout to give Firestore time to process the non-blocking write
-    // before showing a success message.
-    setTimeout(() => {
-        toast({
-            title: 'تم حفظ الإعدادات',
-            description: 'تم تحديث إعدادات النظام بنجاح.',
-        });
+    try {
+      // Use setDoc with merge: true to create or update the document.
+      await setDoc(settingsDocRef, dataToSave, { merge: true });
+      toast({
+          title: 'تم حفظ الإعدادات',
+          description: 'تم تحديث إعدادات النظام بنجاح.',
+      });
+    } catch (error) {
+       console.error("Error saving settings: ", error);
+       toast({
+          variant: "destructive",
+          title: 'فشل حفظ الإعدادات',
+          description: 'حدث خطأ غير متوقع. قد تكون المشكلة في أذونات قاعدة البيانات.',
+       });
+    } finally {
         setIsSaving(false);
-    }, 1500);
+    }
   };
 
   const getDeductionUnit = (type: 'minutes' | 'hours' | 'amount') => {
@@ -201,7 +206,7 @@ export default function SettingsPage() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>إعدادات الحضور العامة</CardTitle>

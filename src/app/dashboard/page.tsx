@@ -132,45 +132,88 @@ export default function DashboardPage() {
                         <p>لا توجد سجلات حضور اليوم حتى الآن.</p>
                     </div>
                 ) : (
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>الموظف</TableHead>
-                        <TableHead className="hidden sm:table-cell">وقت الحضور</TableHead>
-                        <TableHead className="hidden md:table-cell">وقت الانصراف</TableHead>
-                        <TableHead>الحالة</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {combinedData.map((record) => (
-                        <TableRow key={record.id}>
-                        <TableCell>
-                            {record.employee ? (
+                <>
+                {/* Mobile View */}
+                <div className="md:hidden space-y-4">
+                  {combinedData.map((record) => (
+                      <Card key={record.id} className="bg-muted/50">
+                        <CardHeader className="p-4 flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                                <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
-                                <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="font-medium">{record.employee.name}</div>
+                              {record.employee ? (
+                                <>
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
+                                    <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <CardTitle className="text-lg">{record.employee.name}</CardTitle>
+                                </>
+                              ) : (
+                                  <CardTitle className="text-lg">{record.employeeId}</CardTitle>
+                              )}
                             </div>
-                            ) : (
-                                <div className="font-medium">{record.employeeId}</div>
-                            )}
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</TableCell>
-                        <TableCell className="hidden md:table-cell">{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</TableCell>
-                        <TableCell>
                             <Badge
-                            variant='secondary'
-                            className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}
+                              variant="secondary"
+                              className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}
                             >
-                            {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
+                              {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
                             </Badge>
-                        </TableCell>
-                        </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 text-sm">
+                          <div className="flex justify-between border-t pt-2 mt-2">
+                              <p className="text-muted-foreground">وقت الحضور</p>
+                              <p className="font-semibold">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</p>
+                          </div>
+                          <div className="flex justify-between mt-2">
+                              <p className="text-muted-foreground">وقت الانصراف</p>
+                              <p>{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                  ))}
+                </div>
+                {/* Desktop View */}
+                <div className="hidden md:block">
+                  <Table>
+                      <TableHeader>
+                      <TableRow>
+                          <TableHead>الموظف</TableHead>
+                          <TableHead className="hidden sm:table-cell">وقت الحضور</TableHead>
+                          <TableHead className="hidden md:table-cell">وقت الانصراف</TableHead>
+                          <TableHead>الحالة</TableHead>
+                      </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                      {combinedData.map((record) => (
+                          <TableRow key={record.id}>
+                          <TableCell>
+                              {record.employee ? (
+                              <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9">
+                                  <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
+                                  <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div className="font-medium">{record.employee.name}</div>
+                              </div>
+                              ) : (
+                                  <div className="font-medium">{record.employeeId}</div>
+                              )}
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</TableCell>
+                          <TableCell className="hidden md:table-cell">{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</TableCell>
+                          <TableCell>
+                              <Badge
+                              variant='secondary'
+                              className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}
+                              >
+                              {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
+                              </Badge>
+                          </TableCell>
+                          </TableRow>
+                      ))}
+                      </TableBody>
+                  </Table>
+                </div>
+                </>
                 )}
             </CardContent>
           </Card>

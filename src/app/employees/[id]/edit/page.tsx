@@ -28,7 +28,7 @@ import { Save, ArrowRight, RotateCw, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, notFound, useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
-import { useDoc, useFirebase, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import {
@@ -112,36 +112,45 @@ export default function EditEmployeePage() {
 
   const deviceVerificationEnabled = form.watch('deviceVerificationEnabled');
 
-  async function onSubmit(data: EmployeeFormValues) {
+ async function onSubmit(data: EmployeeFormValues) {
     if (!employeeDocRef || !firestore) return;
-    
+
     const { role, ...employeeData } = data;
 
-    // Update the main employee document
-    updateDocumentNonBlocking(employeeDocRef, employeeData);
+    // Use setDoc with merge to update the main employee document
+    setDocumentNonBlocking(employeeDocRef, employeeData, { merge: true });
 
     // --- Securely and correctly update roles ---
     const adminRoleRef = doc(firestore, 'roles_admin', employeeId);
     const hrRoleRef = doc(firestore, 'roles_hr', employeeId);
 
-    // First, remove user from all possible role collections to handle demotions/changes.
-    // These operations will not throw an error if the document doesn't exist.
-    await deleteDoc(adminRoleRef).catch(() => {}); // Ignore errors if doc doesn't exist
-    await deleteDoc(hrRoleRef).catch(() => {}); // Ignore errors if doc doesn't exist
+    try {
+        // Remove user from all possible role collections to handle demotions/changes.
+        await deleteDoc(adminRoleRef);
+        await deleteDoc(hrRoleRef);
 
-    // Then, add to the correct role collection if they are not a standard employee.
-    if (role === 'admin') {
-      await setDoc(adminRoleRef, { uid: employeeId });
-    } else if (role === 'hr') {
-      await setDoc(hrRoleRef, { uid: employeeId });
+        // Then, add to the correct role collection if they are not a standard employee.
+        if (role === 'admin') {
+            await setDoc(adminRoleRef, { uid: employeeId });
+        } else if (role === 'hr') {
+            await setDoc(hrRoleRef, { uid: employeeId });
+        }
+    
+        toast({
+            title: 'تم تحديث بيانات الموظف بنجاح',
+            description: `تم تحديث حساب الموظف ${data.name}.`,
+        });
+        router.push('/employees');
+
+    } catch (error) {
+        console.error("Error updating roles:", error);
+        toast({
+            variant: "destructive",
+            title: 'فشل تحديث الصلاحيات',
+            description: 'حدث خطأ أثناء تحديث صلاحيات الموظف. قد تحتاج إلى التحقق من قواعد الأمان في Firestore.',
+        });
     }
-
-    toast({
-      title: 'تم تحديث بيانات الموظف بنجاح',
-      description: `تم تحديث حساب الموظف ${data.name}.`,
-    });
-    router.push('/employees');
-  }
+}
   
   function handleResetDeviceId() {
     form.setValue('deviceId', '');
@@ -191,7 +200,7 @@ export default function EditEmployeePage() {
                 تفاصيل الحساب الأساسية للموظف.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2">
+            <CardContent className="grid gap-6 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="name"
@@ -248,7 +257,7 @@ export default function EditEmployeePage() {
                 control={form.control}
                 name="status"
                 render={({ field }) => (
-                  <FormItem className="space-y-3">
+                  <FormItem className="space-y-3 sm:col-span-2">
                     <FormLabel>حالة الحساب</FormLabel>
                     <FormControl>
                       <RadioGroup
@@ -296,7 +305,7 @@ export default function EditEmployeePage() {
                     إدارة صلاحيات الوصول وإعدادات الأمان الخاصة بالموظف.
                 </CardDescription>
             </CardHeader>
-            <CardContent className='grid gap-6 md:grid-cols-1'>
+            <CardContent className='grid gap-6'>
                  <FormField
                     control={form.control}
                     name="role"
