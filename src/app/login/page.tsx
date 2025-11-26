@@ -17,8 +17,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile } from "firebase/auth";
-import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from "firebase/auth";
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
@@ -41,17 +41,17 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { auth, firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
 
   useEffect(() => {
     if (!isUserLoading && user) {
-        if (roles.isAdmin || roles.isHr) {
+        if (permissions.isAdmin || permissions.screens.length > 0) {
           router.replace('/dashboard');
         } else {
           router.replace('/scan');
         }
     }
-  }, [user, isUserLoading, roles, router]);
+  }, [user, isUserLoading, permissions, router]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -129,8 +129,6 @@ export default function LoginPage() {
         const employeeDoc = querySnapshot.docs[0];
         const employeeData = employeeDoc.data() as Employee;
         
-        // This is a temporary solution for plaintext passwords. 
-        // In a real app, you would compare hashed passwords.
         if (employeeData.password !== password) {
             toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "كلمة المرور غير صحيحة." });
             setIsLoading(false);
@@ -141,11 +139,16 @@ export default function LoginPage() {
         
         // We use anonymous sign-in to get a temporary user session,
         // then we will attach the real employee ID to it.
+        // We have to sign out any existing anonymous user first.
+        if (auth.currentUser && auth.currentUser.isAnonymous) {
+            await auth.signOut();
+        }
+
         const userCredential = await signInAnonymously(auth);
         
         // This is a trick to associate the anonymous user with the real employee document.
-        // We are marking the user object with the doc id.
-        // The FirebaseProvider will see this and fetch the correct roles.
+        // We are "marking" the user object with the doc id.
+        // The FirebaseProvider will see this and fetch the correct permissions.
         (userCredential.user as any).firestoreDocId = employeeDoc.id;
 
         // Now, perform device verification
@@ -176,7 +179,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "فشل تسجيل الدخول",
-        description: "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.",
+        description: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
       });
     } finally {
       setIsLoading(false);
