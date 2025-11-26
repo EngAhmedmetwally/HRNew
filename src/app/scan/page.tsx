@@ -13,8 +13,8 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Camera, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { useFirebase, useUser, setDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, getDoc, serverTimestamp, setDoc, getDocs, collection, query, where, Timestamp } from 'firebase/firestore';
+import { useFirebase, useUser, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, getDoc, serverTimestamp, setDoc, getDocs, collection, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 
 

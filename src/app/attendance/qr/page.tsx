@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useDoc, useFirebase, useUser } from "@/firebase";
+import { useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { addDoc, collection, doc, Timestamp } from "firebase/firestore";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

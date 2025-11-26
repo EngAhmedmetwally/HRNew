@@ -36,7 +36,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const statusMap = {
   active: { text: "نشط", variant: "secondary", className: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" },
   on_leave: { text: "في إجازة", variant: "secondary", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400" },
-  inactive: { text: "غير نشط", variant: "outline" },
+  inactive: { text: "غير نشط", variant: "outline", className: "bg-gray-100 text-gray-700 dark:bg-gray-900/50 dark:text-gray-400" },
 };
 
 export default function EmployeesPage() {
