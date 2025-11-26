@@ -19,12 +19,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
 import { collection, query, where, Timestamp, orderBy } from "firebase/firestore";
 import type { WorkDay, Employee } from "@/lib/types";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { findImage } from "@/lib/placeholder-images";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useMemo } from 'react';
 
@@ -70,13 +68,7 @@ function DailyAttendanceLog({ combinedData, isLoading }: { combinedData: Combine
                         <CardHeader className="p-4 flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                               {record.employee ? (
-                                <>
-                                  <Avatar className="h-10 w-10">
-                                    <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
-                                    <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                  <CardTitle className="text-lg">{record.employee.name}</CardTitle>
-                                </>
+                                <CardTitle className="text-lg">{record.employee.name}</CardTitle>
                               ) : (
                                   <CardTitle className="text-lg">{record.employeeId}</CardTitle>
                               )}
@@ -106,31 +98,21 @@ function DailyAttendanceLog({ combinedData, isLoading }: { combinedData: Combine
                   <Table>
                       <TableHeader>
                       <TableRow>
-                          <TableHead>الموظف</TableHead>
-                          <TableHead className="hidden sm:table-cell">وقت الحضور</TableHead>
-                          <TableHead className="hidden md:table-cell">وقت الانصراف</TableHead>
-                          <TableHead>الحالة</TableHead>
+                          <TableHead className="text-right">الموظف</TableHead>
+                          <TableHead className="hidden sm:table-cell text-right">وقت الحضور</TableHead>
+                          <TableHead className="hidden md:table-cell text-right">وقت الانصراف</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
                       </TableRow>
                       </TableHeader>
                       <TableBody>
                       {combinedData.map((record) => (
                           <TableRow key={record.id}>
                           <TableCell>
-                              {record.employee ? (
-                              <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9">
-                                  <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
-                                  <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
-                              </Avatar>
-                              <div className="font-medium">{record.employee.name}</div>
-                              </div>
-                              ) : (
-                                  <div className="font-medium">{record.employeeId}</div>
-                              )}
+                              <div className="font-medium text-right">{record.employee?.name || record.employeeId}</div>
                           </TableCell>
-                          <TableCell className="hidden sm:table-cell">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</TableCell>
-                          <TableCell className="hidden md:table-cell">{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</TableCell>
-                          <TableCell>
+                          <TableCell className="hidden sm:table-cell text-right">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</TableCell>
+                          <TableCell className="hidden md:table-cell text-right">{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</TableCell>
+                          <TableCell className="text-right">
                               <Badge
                               variant='secondary'
                               className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}

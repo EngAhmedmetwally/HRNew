@@ -17,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PlusCircle, Loader2, ShieldAlert, Pencil } from "lucide-react";
 import {
   Tooltip,
@@ -28,7 +27,6 @@ import {
 import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
 import { collection } from "firebase/firestore";
 import type { Employee } from "@/lib/types";
-import { findImage } from "@/lib/placeholder-images";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -131,13 +129,7 @@ export default function EmployeesPage() {
                         {employees.map((employee) => (
                         <TableRow key={employee.id} className="hover:bg-muted/50">
                             <TableCell>
-                            <div className="flex items-center justify-end gap-3">
-                                <div className="font-medium text-right">{employee.name}</div>
-                                <Avatar className="h-10 w-10">
-                                <AvatarImage src={findImage(`avatar${(parseInt(employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
-                                <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                            </div>
+                              <div className="font-medium text-right">{employee.name}</div>
                             </TableCell>
                             <TableCell className="hidden sm:table-cell text-right">{employee.employeeId}</TableCell>
                             <TableCell className="hidden md:table-cell text-right">{employee.jobTitle}</TableCell>
@@ -164,7 +156,7 @@ export default function EmployeesPage() {
                     </TableBody>
                  </Table>
             ) : (
-                <div className="text-center py-16 text-muted-foreground">
+                 <div className="text-center py-16 text-muted-foreground">
                     <p className="text-lg font-semibold">لم يتم العثور على موظفين</p>
                     <p className="text-sm mt-2">يمكنك إضافة موظف جديد لبدء إدارة فريقك.</p>
                      <Button className="mt-4" onClick={() => handleOpenDialog()}>

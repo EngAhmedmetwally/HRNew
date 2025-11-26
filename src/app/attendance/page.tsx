@@ -21,7 +21,6 @@ import { useCollection, useFirebase, useMemoFirebase, useUser } from '@/firebase
 import { collection, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import type { WorkDay, Employee } from '@/lib/types';
 import { Loader2, ShieldAlert } from 'lucide-react';
-import { findImage } from '@/lib/placeholder-images';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useMemo, useState } from 'react';
 import { DateRangePicker } from '@/components/shared/date-range-picker';
@@ -143,13 +142,7 @@ export default function AttendanceLogPage() {
                         <CardHeader className="p-4 flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                               {record.employee ? (
-                                <>
-                                  <Avatar className="h-10 w-10">
-                                    <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
-                                    <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                  <CardTitle className="text-lg">{record.employee.name}</CardTitle>
-                                </>
+                                <CardTitle className="text-lg">{record.employee.name}</CardTitle>
                               ) : (
                                   <CardTitle className="text-lg">{record.employeeId}</CardTitle>
                               )}
@@ -197,22 +190,7 @@ export default function AttendanceLogPage() {
                   ) : combinedData.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>
-                        {record.employee ? (
-                        <div className="flex items-center justify-end gap-3">
-                          <div className="font-medium">{record.employee.name}</div>
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage
-                              src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl}
-                              alt="Avatar"
-                            />
-                            <AvatarFallback>
-                              {record.employee.name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                        </div>
-                         ) : (
-                            <div className="font-medium text-right">{record.employeeId}</div>
-                        )}
+                        <div className="font-medium text-right">{record.employee?.name || record.employeeId}</div>
                       </TableCell>
                       <TableCell className="text-right">
                         {record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}
