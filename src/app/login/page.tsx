@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser } from "@/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from "firebase/auth";
-import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
@@ -90,18 +90,17 @@ export default function LoginPage() {
                 throw new Error("auth/wrong-password");
             }
             
-            // If password matches, sign in user anonymously to get a session UID
-            // This is a crucial step for our security rules to work
+            // If password matches, sign out any existing user, then sign in anonymously
             if (auth.currentUser) {
               await auth.signOut();
             }
             const userCredential = await signInAnonymously(auth);
             const anonymousUid = userCredential.user.uid;
 
-            // Associate the new anonymous UID with the employee document
+            // Associate the new anonymous UID with the employee document ID
             // This allows rules to check `request.auth.uid == resource.data.id`
-            const employeeRef = doc(firestore, 'employees', employeeDoc.id);
-            await setDoc(employeeRef, { id: anonymousUid }, { merge: true });
+            const employeeRef = employeeDoc.ref;
+            await updateDoc(employeeRef, { id: anonymousUid });
         }
 
         toast({
