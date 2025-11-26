@@ -212,9 +212,7 @@ export default function ScanPage() {
     } catch(error: any) {
         const errorMessage = error.message || 'حدث خطأ غير متوقع أثناء معالجة الكود.';
         setScanResult({data: 'فشل', message: errorMessage });
-        if (!(error instanceof FirestorePermissionError)) {
-             console.error("An error occurred during QR scan handling:", error);
-        }
+        // The error is already emitted in the functions that throw it, so no need to log it here again.
     }
     
   }, [firestore, user, recordAttendance, toast]);
