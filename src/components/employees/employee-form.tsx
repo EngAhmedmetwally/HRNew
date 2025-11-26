@@ -19,9 +19,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import {
   Select,
   SelectContent,
@@ -136,92 +136,89 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role: newRole, password, ...employeeData } = data;
+        const { role: newRole, ...employeeData } = data;
         
         const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
-
-        if (password) {
-            // NOTE: Updating password in Firebase Auth from a backend/admin SDK is the standard.
-            // This is a client-side workaround and has security implications.
-            // For a real app, this logic should be in a secure backend environment.
-             toast({ variant: 'destructive', title: 'تنبيه', description: 'تحديث كلمة المرور من طرف العميل غير مدعوم حاليًا.' });
-        }
+        delete dataToUpdate.password;
         
-        if (dataToUpdate.deviceId === undefined) {
-           delete dataToUpdate.deviceId;
-        }
+        setDoc(employeeDocRef, dataToUpdate, { merge: true })
+            .then(async () => {
+                const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
+                const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
+                
+                let currentRole = 'employee';
+                const [isAdmin, isHr] = await Promise.all([
+                    getDoc(adminRoleRef).then(snap => snap.exists()),
+                    getDoc(hrRoleRef).then(snap => snap.exists()),
+                ]);
+                if (isAdmin) currentRole = 'admin';
+                else if (isHr) currentRole = 'hr';
 
-        try {
-            await setDoc(employeeDocRef, dataToUpdate, { merge: true });
-            
-            // Smart Role Handling
-            const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
-            const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
-
-            let currentRole = 'employee';
-            const [isAdmin, isHr] = await Promise.all([
-                getDoc(adminRoleRef).then(snap => snap.exists()),
-                getDoc(hrRoleRef).then(snap => snap.exists()),
-            ]);
-            if (isAdmin) currentRole = 'admin';
-            else if (isHr) currentRole = 'hr';
-
-            if(currentRole !== newRole) {
-                if(currentRole === 'admin') await deleteDoc(adminRolegRef);
-                if(currentRole === 'hr') await deleteDoc(hrRoleRef);
-                if (newRole === 'admin') await setDoc(adminRoleRef, { uid: employee.id });
-                if (newRole === 'hr') await setDoc(hrRoleRef, { uid: employee.id });
-            }
-
-            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
-            onFinish();
-        } catch (error: any) {
-            console.error("Error updating employee:", error);
-            toast({ variant: "destructive", title: 'فشل تحديث البيانات', description: error.message || 'حدث خطأ أثناء التحديث. تحقق من الأذونات.' });
-        }
+                if(currentRole !== newRole) {
+                    if(currentRole === 'admin') await deleteDoc(adminRoleRef);
+                    if(currentRole === 'hr') await deleteDoc(hrRoleRef);
+                    if (newRole === 'admin') await setDoc(adminRoleRef, { uid: employee.id });
+                    if (newRole === 'hr') await setDoc(hrRoleRef, { uid: employee.id });
+                }
+                
+                toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
+                onFinish();
+            })
+            .catch(error => {
+                errorEmitter.emit(
+                    'permission-error',
+                    new FirestorePermissionError({
+                        path: employeeDocRef.path,
+                        operation: 'update',
+                        requestResourceData: dataToUpdate,
+                    })
+                );
+            });
     } else {
         // Create new employee
         const employeesRef = collection(firestore, 'employees');
         const q = query(employeesRef, where("employeeId", "==", data.employeeId));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-            form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
-            return;
-        }
         
-        try {
-            // Create user in Firebase Auth
+        getDocs(q).then(querySnapshot => {
+             if (!querySnapshot.empty) {
+                form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
+                return;
+            }
+             // Create user in Firebase Auth
             const email = `${data.employeeId}@hr-pulse.system`;
-            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password!);
-            const newAuthUid = userCredential.user.uid;
+            createUserWithEmailAndPassword(auth, email, data.password!)
+            .then(async (userCredential) => {
+                const newAuthUid = userCredential.user.uid;
 
-            // Create employee document in Firestore with the UID as the ID
-            const { role, ...employeeData } = data;
-            const employeeDoc = {
-                ...employeeData,
-                password: '', // Do not store password in Firestore
-                id: newAuthUid,
-            };
-            await setDoc(doc(firestore, 'employees', newAuthUid), employeeDoc);
+                // Create employee document in Firestore with the UID as the ID
+                const { role, ...employeeData } = data;
+                const employeeDoc = {
+                    ...employeeData,
+                    password: data.password, // Storing password directly in Firestore
+                    id: newAuthUid,
+                };
+                
+                const employeeDocRef = doc(firestore, 'employees', newAuthUid);
+                await setDoc(employeeDocRef, employeeDoc);
 
-            if (role === 'admin') {
-                await setDoc(doc(firestore, 'roles_admin', newAuthUid), { uid: newAuthUid });
-            } else if (role === 'hr') {
-                await setDoc(doc(firestore, 'roles_hr', newAuthUid), { uid: newAuthUid });
-            }
-            
-            toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
-            onFinish();
-        } catch (error: any) {
-            console.error("Employee Creation Error:", error);
-            let errorMessage = "حدث خطأ غير متوقع.";
-            if (error.code === 'auth/email-already-in-use') {
-                errorMessage = "اسم المستخدم (رقم الموظف) مستخدم بالفعل.";
-                form.setError('employeeId', { message: errorMessage });
-            }
-            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: errorMessage });
-        }
+                if (role === 'admin') {
+                    await setDoc(doc(firestore, 'roles_admin', newAuthUid), { uid: newAuthUid });
+                } else if (role === 'hr') {
+                    await setDoc(doc(firestore, 'roles_hr', newAuthUid), { uid: newAuthUid });
+                }
+                
+                toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
+                onFinish();
+
+            }).catch(error => {
+                let errorMessage = "حدث خطأ غير متوقع.";
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = "اسم المستخدم (رقم الموظف) مستخدم بالفعل.";
+                    form.setError('employeeId', { message: errorMessage });
+                }
+                 toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: errorMessage });
+            });
+        });
     }
   }
 
