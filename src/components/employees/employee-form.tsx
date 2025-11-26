@@ -21,7 +21,7 @@ import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import {
   Select,
   SelectContent,
@@ -129,39 +129,47 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (!firestore || !auth) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
+    if (!firestore || !auth || !auth.currentUser) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase أو أنك غير مسجل الدخول.' });
         return;
     }
 
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role: newRole, ...employeeData } = data;
+        const { role: newRole, password, ...employeeData } = data;
         
-        // Prepare data for update, ensuring 'id' is present for security rule check
         const dataToUpdate: { [key: string]: any } = {
             ...employeeData,
-            id: employee.id // Ensure ID is part of the update payload for the security rule
+            id: employee.id,
         };
-
-        // Explicitly remove fields that should not be updated
-        delete dataToUpdate.password;
         delete dataToUpdate.employeeId;
-        
+
         try {
+            // Update Firestore document first
             await updateDoc(employeeDocRef, dataToUpdate);
+
+            // Handle password update if provided
+            if (password && password.length >= 6) {
+                // This is a sensitive operation and might fail if the admin user hasn't
+                // re-authenticated recently. For this app, we'll assume it works.
+                // A production app would need to handle re-authentication.
+                const userToUpdate = { uid: employee.id }; // A mock user object for the function
+                // This is not a real Firebase API. In a real scenario, this would be an admin SDK call.
+                // Since we can't do that on the client, we will just show a toast.
+                // A proper implementation requires a Cloud Function.
+                console.log(`Password for user ${employee.id} would be updated to: ${password}. This requires an admin backend function.`);
+                toast({ title: 'تحديث كلمة المرور', description: 'تحديث كلمة المرور يتطلب وظيفة خلفية (Cloud Function) للتنفيذ بأمان. تم تحديث البيانات الأخرى بنجاح.' });
+            }
 
             // Handle roles update
             const batch = writeBatch(firestore);
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
 
-            // Always delete old roles first to handle demotions correctly
             batch.delete(adminRoleRef);
             batch.delete(hrRoleRef);
 
-            // Add new role if not 'employee'
             if (newRole === 'admin') {
                 batch.set(adminRoleRef, { uid: employee.id });
             } else if (newRole === 'hr') {
@@ -199,14 +207,12 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             .then(async (userCredential) => {
                 const newAuthUid = userCredential.user.uid;
 
-                // Create employee document in Firestore with the UID as the ID
-                const { role, ...employeeData } = data;
+                const { role, password, ...employeeData } = data;
                 
                 const employeeDoc = {
                     ...employeeData,
-                    id: newAuthUid, // Link Firestore doc to Auth UID
+                    id: newAuthUid,
                 };
-                delete (employeeDoc as Partial<EmployeeFormValues>).password;
                 
                 const employeeDocRef = doc(firestore, 'employees', newAuthUid);
                 await setDoc(employeeDocRef, employeeDoc);
