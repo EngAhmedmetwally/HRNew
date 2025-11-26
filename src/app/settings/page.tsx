@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDoc, useFirebase, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase, useUser, setDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -73,7 +73,7 @@ export default function SettingsPage() {
     } else if (!isLoadingSettings && canView && firestore) {
         // If no settings doc exists, create one with defaults
         const docRef = doc(firestore, 'settings', 'global');
-        setDocumentNonBlocking(docRef, defaultSettingsData, {});
+        setDocumentNonBlocking(docRef, defaultSettingsData, { merge: true });
     }
   }, [storedSettings, isLoadingSettings, canView, firestore]);
 
@@ -147,15 +147,18 @@ export default function SettingsPage() {
     setIsSaving(true);
     const dataToSave = { settings, deductionLevels };
     
-    updateDocumentNonBlocking(settingsDocRef, dataToSave);
+    // Use setDoc with merge: true to create or update the document.
+    setDocumentNonBlocking(settingsDocRef, dataToSave, { merge: true });
 
-    setTimeout(() => { // Simulate save time for visual feedback
+    // We use a timeout to give Firestore time to process the non-blocking write
+    // before showing a success message.
+    setTimeout(() => {
         toast({
             title: 'تم حفظ الإعدادات',
             description: 'تم تحديث إعدادات النظام بنجاح.',
         });
         setIsSaving(false);
-    }, 1000);
+    }, 1500);
   };
 
   const getDeductionUnit = (type: 'minutes' | 'hours' | 'amount') => {
