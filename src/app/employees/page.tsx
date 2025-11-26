@@ -98,24 +98,24 @@ export default function EmployeesPage() {
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">إدارة الموظفين</h1>
-            <p className="text-muted-foreground">
-              عرض وتعديل بيانات الموظفين في النظام.
-            </p>
-          </div>
-          <Button className="w-full sm:w-auto" onClick={() => handleOpenDialog()}>
-              <PlusCircle className="ml-2 h-4 w-4" />
-              إضافة موظف
-          </Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">إدارة الموظفين</h1>
+          <p className="text-muted-foreground">
+            عرض وتعديل بيانات الموظفين في النظام.
+          </p>
         </div>
         <Card>
-          <CardHeader>
-            <CardTitle>قائمة الموظفين</CardTitle>
-            <CardDescription>
-              {isLoading && !employees ? 'جاري تحميل الموظفين...' : `تم العثور على ${employees?.length || 0} موظف.`}
-            </CardDescription>
+           <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>قائمة الموظفين</CardTitle>
+                <CardDescription>
+                  {isLoading && !employees ? 'جاري تحميل الموظفين...' : `تم العثور على ${employees?.length || 0} موظف.`}
+                </CardDescription>
+              </div>
+              <Button onClick={() => handleOpenDialog()}>
+                  <PlusCircle className="ml-2 h-4 w-4" />
+                  إضافة موظف
+              </Button>
           </CardHeader>
           <CardContent>
             {isLoading && !employees ? (
@@ -128,7 +128,6 @@ export default function EmployeesPage() {
                         <TableRow>
                           <TableHead className="text-right">اسم الموظف</TableHead>
                           <TableHead className="hidden sm:table-cell text-right">رقم الموظف</TableHead>
-                          <TableHead className="hidden md:table-cell text-right">المنصب الوظيفي</TableHead>
                           <TableHead className="text-right">الحالة</TableHead>
                           <TableHead className="text-right">الإجراءات</TableHead>
                         </TableRow>
@@ -140,7 +139,6 @@ export default function EmployeesPage() {
                               <div className="font-medium text-right">{employee.name}</div>
                             </TableCell>
                             <TableCell className="hidden sm:table-cell text-right">{employee.employeeId}</TableCell>
-                            <TableCell className="hidden md:table-cell text-right">{employee.jobTitle}</TableCell>
                             <TableCell className="text-right">
                               <Badge variant={statusMap[employee.status as keyof typeof statusMap]?.variant as any} className={statusMap[employee.status as keyof typeof statusMap]?.className}>
                                   {statusMap[employee.status as keyof typeof statusMap]?.text}

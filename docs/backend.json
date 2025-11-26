@@ -26,10 +26,6 @@
           "type": "string",
           "description": "Department the employee belongs to."
         },
-        "jobTitle": {
-          "type": "string",
-          "description": "Job title of the employee."
-        },
         "contractType": {
           "type": "string",
           "description": "Type of contract the employee has (e.g., full-time, part-time)."
@@ -72,7 +68,6 @@
         "name",
         "password",
         "department",
-        "jobTitle",
         "contractType",
         "hireDate",
         "status",

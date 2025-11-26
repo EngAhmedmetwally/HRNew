@@ -75,17 +75,23 @@ export default function LoginPage() {
     if (employeeIdInput === 'admin' && password === '123456') {
       try {
         const adminEmail = 'admin@hr-pulse.system';
-        await signInWithEmailAndPassword(auth, adminEmail, password);
+        // Try to sign in. If it fails with 'user-not-found', create the user.
+        try {
+            await signInWithEmailAndPassword(auth, adminEmail, password);
+        } catch (error: any) {
+            if (error.code === 'auth/user-not-found') {
+                await createUserWithEmailAndPassword(auth, adminEmail, password);
+            } else {
+                throw error; // Re-throw other sign-in errors
+            }
+        }
         toast({ title: "تم تسجيل الدخول كمدير للنظام" });
         // The useEffect will handle redirection.
         setIsLoading(false);
         return;
       } catch (error: any) {
-        // If the hardcoded admin account doesn't exist, this will fail.
-        // We should ideally have a way to create it if it doesn't.
-        // For now, we'll show a generic error.
-        console.error("Admin login failed:", error);
-        toast({ variant: "destructive", title: "فشل دخول المدير", description: "لم نتمكن من تسجيل دخول حساب المدير." });
+        console.error("Admin login/creation failed:", error);
+        toast({ variant: "destructive", title: "فشل دخول المدير", description: "لم نتمكن من تسجيل دخول أو إنشاء حساب المدير." });
         setIsLoading(false);
         return;
       }
@@ -111,7 +117,7 @@ export default function LoginPage() {
         }
 
         const employeeDoc = querySnapshot.docs[0];
-        const employeeData = employeeDoc.data();
+        const employeeData = employeeDoc.data() as Employee;
 
         // This is not secure. Passwords should be hashed. For demo purposes only.
         if (employeeData.password !== password) {
@@ -120,34 +126,29 @@ export default function LoginPage() {
             return;
         }
 
-        // Sign in anonymously to get a temporary user session
-        const userCredential = await signInAnonymously(auth);
-        
-        // Use the anonymous user's UID to represent this employee for the session
-        // This is not ideal as it creates a new user every time.
-        // A custom token system would be better.
-        // For now, let's just proceed with the logic.
-        
-        // This part is also tricky, as we're associating an anonymous user with a specific employee's data.
-        // The security rules need to allow this.
-        
-        // The redirection logic will be handled by the useEffect hook based on the roles.
-        // But how do we get roles for an anonymous user? The provider needs to be aware of this mapping.
-        // For simplicity, we'll assume the provider will eventually figure out the roles.
-        
-        // Let's re-implement the original, more correct logic of using email/password
-        const email = `${employeeIdInput}@hr-pulse.system`;
-        
-        if (auth.currentUser) {
-            await auth.signOut();
-        }
+        // Sign in anonymously to get a Firebase user session
+        const { user: anonUser } = await signInAnonymously(auth);
 
-        await signInWithEmailAndPassword(auth, email, password);
+        // Associate the employee data with the anonymous user for this session
+        // This is a simplified custom auth flow. In a production app, you'd use custom tokens.
+        await updateProfile(anonUser, { displayName: employeeData.name });
+
+        // Manually "link" the employee ID for the role check in the provider
+        // This is a workaround to make the useUser hook work with this flow.
+        // We'll add the firestore doc ID to the user object temporarily.
+        (anonUser as any).firestoreDocId = employeeDoc.id;
+
 
         toast({
             title: "تم تسجيل الدخول بنجاح",
             description: "جاري توجيهك...",
         });
+        
+        // The useUser hook will now re-evaluate and find the roles based on the firestoreDocId
+        // This forces a re-render and the useEffect will redirect.
+        // To be sure, we can manually trigger a router refresh.
+        router.refresh();
+
 
     } catch (error: any) {
       console.error("Login Error:", error);

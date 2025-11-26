@@ -5,7 +5,6 @@ export interface Employee {
   id: string; // Corresponds to Firebase Auth UID
   employeeId: string; // Custom employee ID used for login
   name: string;
-  jobTitle: string;
   contractType: 'full-time' | 'part-time';
   customCheckInTime?: string;
   customCheckOutTime?: string;

@@ -20,8 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updatePassword } from 'firebase/auth';
+import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc, addDoc } from 'firebase/firestore';
 import {
   Select,
   SelectContent,
@@ -38,7 +37,6 @@ const employeeFormSchema = z.object({
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'اسم المستخدم (رقم الموظف) مطلوب' }),
   password: z.string().optional(),
-  jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
   customCheckInTime: z.string().optional(),
   customCheckOutTime: z.string().optional(),
@@ -61,7 +59,6 @@ const defaultFormValues: Partial<EmployeeFormValues> = {
   name: '',
   employeeId: '',
   password: '',
-  jobTitle: '',
   contractType: 'full-time',
   customCheckInTime: '',
   customCheckOutTime: '',
@@ -139,22 +136,17 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         
-        // Exclude password from the main update, handle it separately
-        const { role: newRole, password, employeeId, ...employeeDataForUpdate } = data;
-        
-        const finalDataToUpdate: Partial<Employee> = {
-          ...employeeDataForUpdate,
-        };
+        const { role: newRole, ...employeeDataForUpdate } = data;
         
         try {
-            await updateDoc(employeeDocRef, finalDataToUpdate)
+            await updateDoc(employeeDocRef, employeeDataForUpdate)
                 .catch(error => {
                     errorEmitter.emit(
                         'permission-error',
                         new FirestorePermissionError({
                             path: employeeDocRef.path,
                             operation: 'update',
-                            requestResourceData: finalDataToUpdate,
+                            requestResourceData: employeeDataForUpdate,
                         })
                     );
                     throw error;
@@ -207,43 +199,33 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 return;
             }
 
-            // 1. Create user in Firebase Auth
-            const email = `${data.employeeId}@hr-pulse.system`;
-            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password!);
-            const newAuthUid = userCredential.user.uid;
-
-            // 2. Prepare Firestore document with the correct ID
-            const { role, ...employeeData } = data;
-             const employeeDocData: Omit<Employee, 'id'> & { password?: string } = {
-                ...employeeData,
-            };
-
-            // 3. Set the Firestore document with the correct UID as the document ID
-            const employeeDocRef = doc(firestore, 'employees', newAuthUid);
-            await setDoc(employeeDocRef, employeeDocData)
-                .catch(error => {
-                    errorEmitter.emit(
-                        'permission-error',
-                        new FirestorePermissionError({
-                            path: employeeDocRef.path,
-                            operation: 'create',
-                            requestResourceData: { ...employeeDocData, id: newAuthUid }, 
-                        })
-                    );
-                    throw error;
-                });
+            // Prepare Firestore document
+            const { role, id, ...employeeData } = data;
             
-            // 4. Set roles if applicable
+            // Add the new employee document to Firestore
+            const docRef = await addDoc(employeesRef, employeeData).catch(error => {
+                errorEmitter.emit(
+                    'permission-error',
+                    new FirestorePermissionError({
+                        path: employeesRef.path,
+                        operation: 'create',
+                        requestResourceData: employeeData, 
+                    })
+                );
+                throw error;
+            });
+            
+            // Set roles if applicable
             if (role === 'admin' || role === 'hr') {
-                const roleRef = doc(firestore, `roles_${role}`, newAuthUid);
-                await setDoc(roleRef, { uid: newAuthUid })
+                const roleRef = doc(firestore, `roles_${role}`, docRef.id);
+                await setDoc(roleRef, { uid: docRef.id })
                     .catch(error => {
                          errorEmitter.emit(
                             'permission-error',
                             new FirestorePermissionError({
                                 path: roleRef.path,
                                 operation: 'create',
-                                requestResourceData: { uid: newAuthUid },
+                                requestResourceData: { uid: docRef.id },
                             })
                         );
                         throw error;
@@ -254,9 +236,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             onFinish();
 
         } catch (error: any) {
-             if (error.code === 'auth/email-already-in-use') {
-                form.setError('employeeId', { message: "اسم المستخدم (رقم الموظف) مستخدم بالفعل." });
-             } else if (!(error instanceof FirestorePermissionError)) {
+             if (!(error instanceof FirestorePermissionError)) {
                  console.error("Create employee failed:", error);
                  toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
              }
@@ -321,19 +301,6 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
               </FormItem>
               )}
           />
-              <FormField
-              control={form.control}
-              name="jobTitle"
-              render={({ field }) => (
-                  <FormItem>
-                  <FormLabel>المنصب الوظيفي</FormLabel>
-                  <FormControl>
-                      <Input placeholder="مثال: مدير مبيعات" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                  </FormItem>
-              )}
-              />
           <FormField
               control={form.control}
               name="contractType"
@@ -549,5 +516,3 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     </Form>
   );
 }
-
-    

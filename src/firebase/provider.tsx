@@ -89,10 +89,13 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                 });
                 return; // Stop further checks for the admin
             }
+            
+            // For custom DB auth, the doc ID is temporarily attached to the user object
+            const employeeIdToCheck = (firebaseUser as any).firestoreDocId || firebaseUser.uid;
 
             // For all other users, fetch roles from Firestore
-            const adminRoleRef = doc(firestore, 'roles_admin', firebaseUser.uid);
-            const hrRoleRef = doc(firestore, 'roles_hr', firebaseUser.uid);
+            const adminRoleRef = doc(firestore, 'roles_admin', employeeIdToCheck);
+            const hrRoleRef = doc(firestore, 'roles_hr', employeeIdToCheck);
             try {
                 const [adminSnap, hrSnap] = await Promise.all([
                     getDoc(adminRoleRef).catch(e => {
