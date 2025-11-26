@@ -21,6 +21,7 @@ import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase } from '@/firebase';
 import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import {
   Select,
   SelectContent,
@@ -73,7 +74,7 @@ const defaultFormValues: EmployeeFormValues = {
 
 export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const { toast } = useToast();
-  const { firestore } = useFirebase();
+  const { firestore, auth } = useFirebase();
   const isEditMode = !!employee;
 
   const form = useForm<EmployeeFormValues>({
@@ -127,7 +128,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (!firestore) {
+    if (!firestore || !auth) {
         toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
         return;
     }
@@ -135,14 +136,17 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role: newRole, ...employeeData } = data;
+        const { role: newRole, password, ...employeeData } = data;
         
         const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
 
-        if (!dataToUpdate.password) {
-            delete dataToUpdate.password;
+        if (password) {
+            // NOTE: Updating password in Firebase Auth from a backend/admin SDK is the standard.
+            // This is a client-side workaround and has security implications.
+            // For a real app, this logic should be in a secure backend environment.
+             toast({ variant: 'destructive', title: 'تنبيه', description: 'تحديث كلمة المرور من طرف العميل غير مدعوم حاليًا.' });
         }
-
+        
         if (dataToUpdate.deviceId === undefined) {
            delete dataToUpdate.deviceId;
         }
@@ -163,7 +167,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             else if (isHr) currentRole = 'hr';
 
             if(currentRole !== newRole) {
-                if(currentRole === 'admin') await deleteDoc(adminRoleRef);
+                if(currentRole === 'admin') await deleteDoc(adminRolegRef);
                 if(currentRole === 'hr') await deleteDoc(hrRoleRef);
                 if (newRole === 'admin') await setDoc(adminRoleRef, { uid: employee.id });
                 if (newRole === 'hr') await setDoc(hrRoleRef, { uid: employee.id });
@@ -185,28 +189,38 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
             return;
         }
-
-        const { role, ...employeeData } = data;
-        const newEmployeeId = doc(employeesRef).id;
-
+        
         try {
+            // Create user in Firebase Auth
+            const email = `${data.employeeId}@hr-pulse.system`;
+            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password!);
+            const newAuthUid = userCredential.user.uid;
+
+            // Create employee document in Firestore with the UID as the ID
+            const { role, ...employeeData } = data;
             const employeeDoc = {
                 ...employeeData,
-                id: newEmployeeId,
+                password: '', // Do not store password in Firestore
+                id: newAuthUid,
             };
-            await setDoc(doc(firestore, 'employees', newEmployeeId), employeeDoc);
+            await setDoc(doc(firestore, 'employees', newAuthUid), employeeDoc);
 
             if (role === 'admin') {
-                await setDoc(doc(firestore, 'roles_admin', newEmployeeId), { uid: newEmployeeId });
+                await setDoc(doc(firestore, 'roles_admin', newAuthUid), { uid: newAuthUid });
             } else if (role === 'hr') {
-                await setDoc(doc(firestore, 'roles_hr', newEmployeeId), { uid: newEmployeeId });
+                await setDoc(doc(firestore, 'roles_hr', newAuthUid), { uid: newAuthUid });
             }
             
             toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
             onFinish();
         } catch (error: any) {
             console.error("Employee Creation Error:", error);
-            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message || "حدث خطأ غير متوقع." });
+            let errorMessage = "حدث خطأ غير متوقع.";
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = "اسم المستخدم (رقم الموظف) مستخدم بالفعل.";
+                form.setError('employeeId', { message: errorMessage });
+            }
+            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: errorMessage });
         }
     }
   }
@@ -221,7 +235,8 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
 
   return (
     <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-1 pr-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-1">
+            <ScrollArea className="h-[70vh] pr-4">
           <FormField
               control={form.control}
               name="name"
@@ -324,7 +339,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                           <FormItem>
                               <FormLabel>وقت الحضور المخصص</FormLabel>
                               <FormControl>
-                              <Input type="time" {...field} />
+                              <Input type="time" {...field} value={field.value ?? ''} />
                               </FormControl>
                               <FormMessage />
                           </FormItem>
@@ -337,7 +352,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                           <FormItem>
                               <FormLabel>وقت الانصراف المخصص</FormLabel>
                               <FormControl>
-                              <Input type="time" {...field} />
+                              <Input type="time" {...field} value={field.value ?? ''} />
                               </FormControl>
                               <FormMessage />
                           </FormItem>
@@ -467,7 +482,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                       <FormLabel>معرف الجهاز المسجل</FormLabel>
                       <div className="flex flex-col sm:flex-row gap-2">
                       <FormControl>
-                          <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" />
+                          <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" value={field.value ?? ''}/>
                       </FormControl>
                       <Button type="button" variant="secondary" onClick={handleResetDeviceId} disabled={!field.value}>
                           <RotateCw className="ml-2 h-4 w-4" />
@@ -482,6 +497,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                   )}
           />
           )}
+          </ScrollArea>
           
           <div className="flex justify-end pt-4">
               <Button type="submit" disabled={form.formState.isSubmitting}>

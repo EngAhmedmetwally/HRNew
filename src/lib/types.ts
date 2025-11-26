@@ -2,11 +2,9 @@ import type { ImagePlaceholder } from './placeholder-images';
 import type { Timestamp } from 'firebase/firestore';
 
 export interface Employee {
-  id: string; // Corresponds to a unique ID, but not necessarily Firebase Auth UID anymore
-  employeeId: string; // Custom employee ID
-  password?: string; // Stored in Firestore, not Auth
+  id: string; // Corresponds to Firebase Auth UID
+  employeeId: string; // Custom employee ID used for login
   name: string;
-  avatar?: ImagePlaceholder;
   department: string;
   jobTitle: string;
   contractType: 'full-time' | 'part-time';
@@ -17,6 +15,7 @@ export interface Employee {
   baseSalary: number;
   deviceVerificationEnabled?: boolean;
   deviceId?: string;
+  // Password is not stored in Firestore, it's managed by Firebase Auth
 }
 
 

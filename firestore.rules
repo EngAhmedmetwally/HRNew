@@ -22,7 +22,7 @@ rules_version = '2';
  *
  * @structure
  * Data Structure: Data is organized into top-level collections.
- * - /employees/{employeeId}: Core employee profiles.
+ * - /employees/{employeeId}: Core employee profiles. The document ID {employeeId} MUST match the auth UID.
  * - /workDays: All employee attendance data, keyed by a unique workDayId. Ownership is checked via the `employeeId` field in the document.
  * - /payrolls: Employee-specific data, logically partitioned by date and keyed by employeeId in the path for direct ownership checks.
  * - /deductionPolicies: System-wide configuration, readable by all, writable only by Admins.

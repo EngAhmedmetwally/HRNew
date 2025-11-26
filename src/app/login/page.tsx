@@ -17,8 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser } from "@/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from "firebase/auth";
-import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
@@ -60,48 +59,11 @@ export default function LoginPage() {
     const formData = new FormData(event.target as HTMLFormElement);
     const employeeId = formData.get("employeeId") as string;
     const password = formData.get("password") as string;
+    
+    const email = employeeId.includes('@') ? employeeId : `${employeeId}@hr-pulse.system`;
 
     try {
-        // Special case for the super-admin
-        if (employeeId === 'admin' && password === '123456') {
-            const adminEmail = 'admin@hr-pulse.system';
-            try {
-                await signInWithEmailAndPassword(auth, adminEmail, password);
-            } catch (error: any) {
-                if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                    await createUserWithEmailAndPassword(auth, adminEmail, password);
-                } else {
-                    throw error;
-                }
-            }
-        } else {
-            // Standard employee login using Firestore for credentials
-            const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                throw new Error("auth/user-not-found");
-            }
-            
-            const employeeDoc = querySnapshot.docs[0];
-            const employeeData = employeeDoc.data() as Employee;
-            
-            if (employeeData.password !== password) {
-                throw new Error("auth/wrong-password");
-            }
-            
-            // If password matches, sign out any existing user, then sign in anonymously
-            if (auth.currentUser) {
-              await auth.signOut();
-            }
-            const userCredential = await signInAnonymously(auth);
-            const anonymousUid = userCredential.user.uid;
-
-            // Associate the new anonymous UID with the employee document ID
-            // This allows rules to check `request.auth.uid == resource.data.id`
-            const employeeRef = employeeDoc.ref;
-            await updateDoc(employeeRef, { id: anonymousUid });
-        }
+        await signInWithEmailAndPassword(auth, email, password);
 
         toast({
             title: "تم تسجيل الدخول بنجاح",
@@ -113,10 +75,8 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-      if (error.message === 'auth/user-not-found' || error.message === 'auth/wrong-password') {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
-      } else if (error.code === 'auth/invalid-credential') {
-        description = "بيانات اعتماد المدير غير صالحة.";
       }
       toast({
         variant: "destructive",
@@ -128,7 +88,7 @@ export default function LoginPage() {
     }
   };
   
-   if (isUserLoading || (user && !user.isAnonymous)) { // Also show splash if a non-anonymous user is detected
+   if (isUserLoading || user) { 
         return (
              <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background text-foreground">
                 <div className="absolute inset-0 bg-background" />
