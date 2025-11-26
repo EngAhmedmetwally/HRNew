@@ -5,6 +5,8 @@ import { FirebaseApp } from 'firebase/app';
 import { Firestore, doc, getDoc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
+
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -82,8 +84,16 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             const hrRoleRef = doc(firestore, 'roles_hr', firebaseUser.uid);
             try {
                 const [adminSnap, hrSnap] = await Promise.all([
-                    getDoc(adminRoleRef),
-                    getDoc(hrRoleRef)
+                    getDoc(adminRoleRef).catch(e => {
+                        const contextualError = new FirestorePermissionError({ operation: 'get', path: adminRoleRef.path });
+                        errorEmitter.emit('permission-error', contextualError);
+                        throw e; // re-throw original error
+                    }),
+                    getDoc(hrRoleRef).catch(e => {
+                        const contextualError = new FirestorePermissionError({ operation: 'get', path: hrRoleRef.path });
+                        errorEmitter.emit('permission-error', contextualError);
+                        throw e; // re-throw original error
+                    })
                 ]);
                 const roles = {
                     isAdmin: adminSnap.exists(),
