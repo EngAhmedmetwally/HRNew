@@ -12,6 +12,7 @@ import {
   Camera,
   LogOut,
   User,
+  LucideIcon,
 } from "lucide-react";
 import {
   Sidebar as AppSidebar,
@@ -28,7 +29,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "../ui/button";
 import { FingerprintIcon } from "../auth/fingerprint-icon";
 
-const menuItems = [
+interface MenuItem {
+    href: string;
+    icon: LucideIcon;
+    label: string;
+    roles: ('admin' | 'hr' | 'employee')[];
+}
+
+export const menuItems: MenuItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ['admin', 'hr'] },
     { href: "/employees", icon: Users, label: "الموظفين", roles: ['admin', 'hr'] },
     { href: "/attendance", icon: ScanLine, label: "سجل الحضور", roles: ['admin', 'hr'] },
@@ -62,11 +70,11 @@ export function Sidebar() {
     });
 
   return (
-    <AppSidebar side="right" variant="sidebar" collapsible="icon" className="bg-background">
+    <AppSidebar side="right" variant="sidebar" collapsible="offcanvas" className="bg-background md:hidden">
       <SidebarHeader className="h-16 justify-center">
         <Link href="/dashboard" className="flex items-center gap-2">
           <FingerprintIcon className="h-8 w-8 text-primary" />
-          <span className="font-bold text-lg text-foreground group-data-[collapsible=icon]:hidden">
+          <span className="font-bold text-lg text-foreground">
             HighClass HR
           </span>
         </Link>
@@ -83,10 +91,7 @@ export function Sidebar() {
             ) : (
                 accessibleMenuItems.map((item) => (
                     <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                        asChild
-                        tooltip={{ children: item.label, side: "left" }}
-                    >
+                    <SidebarMenuButton asChild>
                         <Link href={item.href}>
                         <item.icon />
                         <span>{item.label}</span>
@@ -98,14 +103,13 @@ export function Sidebar() {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2">
+      <SidebarFooter>
          {user && (
             <div className="w-full flex flex-col items-center gap-2 p-2">
                  <SidebarMenu className="w-full">
                      <SidebarMenuItem>
                         <SidebarMenuButton
                             asChild
-                            tooltip={{ children: "تسجيل الخروج", side: "left" }}
                             onClick={handleLogout}
                             className="bg-destructive/10 text-destructive hover:bg-destructive/20"
                         >
