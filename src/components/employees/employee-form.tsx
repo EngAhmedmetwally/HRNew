@@ -34,6 +34,7 @@ import { ScrollArea } from '../ui/scroll-area';
 
 // Unified schema for both create and edit
 const employeeFormSchema = z.object({
+  id: z.string().optional(), // Keep ID for updates
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'اسم المستخدم (رقم الموظف) مطلوب' }),
   password: z.string().optional(),
@@ -56,7 +57,7 @@ interface EmployeeFormProps {
     onFinish: () => void;
 }
 
-const defaultFormValues: EmployeeFormValues = {
+const defaultFormValues: Partial<EmployeeFormValues> = {
   name: '',
   employeeId: '',
   password: '',
@@ -138,8 +139,11 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         const { role: newRole, ...employeeData } = data;
         
-        // Make a mutable copy to work with
-        const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
+        // Prepare data for update, ensuring 'id' is present for security rule check
+        const dataToUpdate: { [key: string]: any } = {
+            ...employeeData,
+            id: employee.id // Ensure ID is part of the update payload for the security rule
+        };
 
         // Explicitly remove fields that should not be updated
         delete dataToUpdate.password;
@@ -169,6 +173,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
+            console.error('Update failed', error);
             errorEmitter.emit(
                 'permission-error',
                 new FirestorePermissionError({
@@ -179,7 +184,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             );
         }
     } else {
-        // Create new employee
+        // Create new employee logic...
         const employeesRef = collection(firestore, 'employees');
         const q = query(employeesRef, where("employeeId", "==", data.employeeId));
         
@@ -201,7 +206,6 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                     ...employeeData,
                     id: newAuthUid, // Link Firestore doc to Auth UID
                 };
-                 // Don't store the password in the Firestore document
                 delete (employeeDoc as Partial<EmployeeFormValues>).password;
                 
                 const employeeDocRef = doc(firestore, 'employees', newAuthUid);
