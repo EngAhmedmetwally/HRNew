@@ -43,79 +43,9 @@ const statusMap = {
   },
 };
 
-export default function DashboardPage() {
-    const { firestore } = useFirebase();
-    const { user, roles, isUserLoading } = useUser();
-
-    const canView = roles.isAdmin || roles.isHr;
-
-    const dailyWorkDaysQuery = useMemoFirebase(() => {
-        if (!firestore || !user || !canView) return null;
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const startOfDayTimestamp = Timestamp.fromDate(startOfDay);
-
-        return query(
-            collection(firestore, 'workDays'), 
-            where('checkInTime', '>=', startOfDayTimestamp),
-            orderBy('checkInTime', 'desc')
-        );
-    }, [firestore, user, canView]);
-    
-    const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(dailyWorkDaysQuery);
-
-    const employeesQuery = useMemoFirebase(() => {
-        if (!firestore || !user || !canView) return null;
-        return collection(firestore, 'employees');
-    }, [firestore, user, canView]);
-
-    const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
-
-    const combinedData: CombinedWorkDay[] = useMemo(() => {
-        if (!workDays || !employees) return [];
-        
-        const employeesMap = new Map(employees.map(e => [e.id, e]));
-        
-        return workDays.map(wd => ({
-        ...wd,
-        employee: employeesMap.get(wd.employeeId),
-        }));
-    }, [workDays, employees]);
-
-    const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
-
-    if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full">
-                <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            </div>
-        );
-    }
-
-    if (!canView) {
-        return (
-            <Alert variant="destructive">
-                <ShieldAlert className="h-4 w-4" />
-                <AlertTitle>وصول مرفوض</AlertTitle>
-                <AlertDescription>
-                    ليس لديك الصلاحية لعرض هذه الصفحة.
-                </AlertDescription>
-            </Alert>
-        );
-    }
-
-  return (
-    <div className="flex-1 space-y-4 md:space-y-8">
-      <StatsCards />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
-        <div className="lg:col-span-2">
-          <AttendanceChart />
-        </div>
-        <div className="lg:col-span-1">
-          <AnomalyDetector />
-        </div>
-        <div className="lg:col-span-3">
-          <Card>
+function DailyAttendanceLog({ combinedData, isLoading }: { combinedData: CombinedWorkDay[], isLoading: boolean }) {
+    return (
+        <Card>
             <CardHeader>
               <CardTitle>سجل الحضور اليومي</CardTitle>
               <CardDescription>
@@ -217,6 +147,82 @@ export default function DashboardPage() {
                 )}
             </CardContent>
           </Card>
+    );
+}
+
+export default function DashboardPage() {
+    const { firestore } = useFirebase();
+    const { user, roles, isUserLoading } = useUser();
+
+    const canView = roles.isAdmin || roles.isHr;
+
+    const dailyWorkDaysQuery = useMemoFirebase(() => {
+        if (!firestore || !user || !canView) return null;
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const startOfDayTimestamp = Timestamp.fromDate(startOfDay);
+
+        return query(
+            collection(firestore, 'workDays'), 
+            where('checkInTime', '>=', startOfDayTimestamp),
+            orderBy('checkInTime', 'desc')
+        );
+    }, [firestore, user, canView]);
+    
+    const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(dailyWorkDaysQuery);
+
+    const employeesQuery = useMemoFirebase(() => {
+        if (!firestore || !user || !canView) return null;
+        return collection(firestore, 'employees');
+    }, [firestore, user, canView]);
+
+    const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
+
+    const combinedData: CombinedWorkDay[] = useMemo(() => {
+        if (!workDays || !employees) return [];
+        
+        const employeesMap = new Map(employees.map(e => [e.id, e]));
+        
+        return workDays.map(wd => ({
+        ...wd,
+        employee: employeesMap.get(wd.employeeId),
+        }));
+    }, [workDays, employees]);
+
+    const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full">
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <Alert variant="destructive">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>وصول مرفوض</AlertTitle>
+                <AlertDescription>
+                    ليس لديك الصلاحية لعرض هذه الصفحة.
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
+  return (
+    <div className="flex-1 space-y-4 md:space-y-8">
+      <StatsCards />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
+        <div className="lg:col-span-1">
+          <AnomalyDetector />
+        </div>
+        <div className="lg:col-span-1">
+          <AttendanceChart />
+        </div>
+        <div className="lg:col-span-1">
+           <DailyAttendanceLog combinedData={combinedData} isLoading={isLoading} />
         </div>
       </div>
     </div>
