@@ -207,7 +207,7 @@ export default function ScanPage() {
     } catch(error: any) {
         const errorMessage = error.message || 'حدث خطأ غير متوقع أثناء معالجة الكود.';
         setScanResult({data: 'فشل', message: errorMessage });
-        toast({ variant: 'destructive', title: 'فشل تسجيل الحضور', description: errorMessage });
+        // The toast is removed to avoid duplicating the error message shown by the dev overlay.
         // This will catch permission errors from the getDoc call on qrCodes
         if (!(error instanceof FirestorePermissionError)) {
              console.error("An error occurred during QR scan handling:", error);
