@@ -117,21 +117,19 @@ export default function EditEmployeePage() {
     
     const { role, ...employeeData } = data;
 
+    // Update the main employee document
     updateDocumentNonBlocking(employeeDocRef, employeeData);
 
-    // Securely update roles
+    // --- Securely and correctly update roles ---
     const adminRoleRef = doc(firestore, 'roles_admin', employeeId);
     const hrRoleRef = doc(firestore, 'roles_hr', employeeId);
 
-    const operations = [];
-    
-    // Always remove from both first to handle demotions
-    operations.push(deleteDoc(adminRoleRef));
-    operations.push(deleteDoc(hrRoleRef));
-    
-    await Promise.all(operations);
-    
-    // Then add to the correct role collection if not 'employee'
+    // First, remove user from all possible role collections to handle demotions/changes.
+    // These operations will not throw an error if the document doesn't exist.
+    await deleteDoc(adminRoleRef).catch(() => {}); // Ignore errors if doc doesn't exist
+    await deleteDoc(hrRoleRef).catch(() => {}); // Ignore errors if doc doesn't exist
+
+    // Then, add to the correct role collection if they are not a standard employee.
     if (role === 'admin') {
       await setDoc(adminRoleRef, { uid: employeeId });
     } else if (role === 'hr') {
