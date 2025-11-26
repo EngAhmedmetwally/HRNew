@@ -136,11 +136,30 @@ export default function LoginPage() {
         try {
              await signInWithEmailAndPassword(auth, email, password);
         } catch (error: any) {
-             if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
-                await createUserWithEmailAndPassword(auth, email, password);
-                await signInWithEmailAndPassword(auth, email, password);
+             if (error.code === 'auth/user-not-found') {
+                // User exists in DB but not in Auth, so create and sign in
+                try {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (creationError: any) {
+                     if (creationError.code === 'auth/email-already-in-use') {
+                        // This is an inconsistent state, but we can try signing in again as a fallback.
+                        // It implies the user exists in Auth but the initial signIn failed.
+                        await signInWithEmailAndPassword(auth, email, password);
+                     } else {
+                        throw creationError; // Other creation error
+                     }
+                }
+             } else if (error.code === 'auth/invalid-credential') {
+                // This means the user exists in Auth, but the password in the form
+                // does not match the password in Auth. This can happen if the DB password
+                // is out of sync with the Auth password.
+                // We trust the DB password check we already did.
+                toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "كلمة المرور غير متطابقة بين قاعدة البيانات والمصادقة. يرجى مراجعة المدير." });
+                setIsLoading(false);
+                return;
              } else {
-                throw error;
+                throw error; // Other sign-in error
              }
         }
         
