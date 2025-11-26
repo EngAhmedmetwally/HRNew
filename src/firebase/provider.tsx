@@ -93,14 +93,14 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                     throw e; // re-throw original error
                 });
                 
-                let permissions: UserPermissions = { isAdmin: false, screens: [] };
+                let userPermissions: UserPermissions = { isAdmin: false, screens: [] };
 
                 if (employeeSnap.exists()) {
                     const employeeData = employeeSnap.data() as Employee;
-                    permissions.screens = employeeData.permissions || [];
+                    userPermissions.screens = employeeData.permissions || [];
                 }
 
-                setUserAuthState({ user: firebaseUser, permissions, isUserLoading: false, userError: null });
+                setUserAuthState({ user: firebaseUser, permissions: userPermissions, isUserLoading: false, userError: null });
             } catch (error) {
                 console.error("FirebaseProvider: Error fetching user permissions:", error);
                 // Set default (non-privileged) permissions on error
@@ -202,3 +202,11 @@ export const useUser = (): UserHookResult => {
   const { user, permissions, isUserLoading, userError } = useFirebase();
   return { user, permissions, isUserLoading, userError };
 };
+
+// Add this interface to define the props for FirebaseProvider
+interface FirebaseProviderProps {
+  children: ReactNode;
+  firebaseApp: FirebaseApp | null;
+  firestore: Firestore | null;
+  auth: Auth | null;
+}
