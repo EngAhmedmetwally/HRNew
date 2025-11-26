@@ -77,7 +77,8 @@ export default function ScanPage() {
   }, [toast, user]);
   
   const recordAttendance = useCallback(async (): Promise<string> => {
-    if (!firestore || !user) {
+    // Add a guard clause to ensure user and firestore are available.
+    if (!firestore || !user?.uid) {
         throw new Error('لم يتم العثور على جلسة مستخدم صالحة.');
     };
 
