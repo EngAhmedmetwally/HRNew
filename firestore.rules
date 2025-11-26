@@ -171,7 +171,8 @@ service cloud.firestore {
      * @principle Restricts access to internal, process-specific data to authorized roles only.
      */
     match /qrCodes/{qrCodeId} {
-      allow get, list, create, update, delete: if isHrOrAdmin();
+      allow get: if isSignedIn();
+      allow list, create, update, delete: if isHrOrAdmin();
     }
 
 
