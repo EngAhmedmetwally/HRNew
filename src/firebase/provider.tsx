@@ -84,11 +84,15 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             }
 
             // For all other users, fetch roles from Firestore
+            const adminRoleRef = doc(firestore, 'roles_admin', firebaseUser.uid);
             const hrRoleRef = doc(firestore, 'roles_hr', firebaseUser.uid);
             try {
-                const hrSnap = await getDoc(hrRoleRef);
+                const [adminSnap, hrSnap] = await Promise.all([
+                    getDoc(adminRoleRef),
+                    getDoc(hrRoleRef)
+                ]);
                 const roles = {
-                    isAdmin: false, // Only the hardcoded email can be admin
+                    isAdmin: adminSnap.exists(),
                     isHr: hrSnap.exists()
                 };
                 setUserAuthState({ user: firebaseUser, roles, isUserLoading: false, userError: null });
