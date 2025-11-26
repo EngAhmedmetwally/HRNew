@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ChevronRight, ChevronLeft, ArrowUpCircle, ArrowDownCircle, Banknote, FileDigit } from "lucide-react";
+import { FileText, ChevronRight, ChevronLeft, ArrowUpCircle, ArrowDownCircle, Banknote, FileDigit, Loader2, ShieldAlert } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -19,7 +19,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useState, useMemo } from "react";
-import type { Payroll } from '@/lib/types';
+import type { Payroll, Employee } from '@/lib/types';
+import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
+import { collection, query, where } from "firebase/firestore";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
 const statusMap = {
@@ -33,7 +36,11 @@ const formatCurrency = (amount: number) => {
   
 
 export default function PayrollPage() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 6, 1)); // Start with July 2024
+  const [currentDate, setCurrentDate] = useState(new Date()); 
+  const { firestore } = useFirebase();
+  const { user, roles, isUserLoading } = useUser();
+
+  const canView = roles.isAdmin || roles.isHr;
 
   const handleMonthChange = (direction: 'next' | 'prev') => {
     setCurrentDate(prevDate => {
@@ -44,26 +51,73 @@ export default function PayrollPage() {
     });
   };
   
-  // NOTE: This uses mock data. In a real app, you would fetch this from Firestore.
-  const currentMonthData: Payroll[] = useMemo(() => {
-    return [];
-  }, [currentDate]);
+  const selectedYear = currentDate.getFullYear();
+  const selectedMonth = currentDate.getMonth() + 1; // getMonth() is 0-indexed
+
+  const payrollsQuery = useMemoFirebase(() => {
+    if (!firestore || !canView) return null;
+    return query(
+      collection(firestore, 'payrolls'),
+      where('year', '==', selectedYear),
+      where('month', '==', selectedMonth)
+    );
+  }, [firestore, canView, selectedYear, selectedMonth]);
+
+  const { data: payrolls, isLoading: isLoadingPayrolls } = useCollection<Payroll>(payrollsQuery);
+
+  const employeesQuery = useMemoFirebase(() => {
+    if (!firestore || !canView) return null;
+    return collection(firestore, 'employees');
+  }, [firestore, canView]);
+
+  const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
+
+  const combinedData = useMemo(() => {
+    if (!payrolls || !employees) return [];
+    const employeeMap = new Map(employees.map(e => [e.id, e.name]));
+    return payrolls.map(p => ({
+      ...p,
+      employeeName: employeeMap.get(p.employeeId) || 'موظف غير معروف'
+    }));
+  }, [payrolls, employees]);
 
   const totals = useMemo(() => {
-    if (!currentMonthData) {
+    if (!combinedData) {
         return { baseSalary: 0, allowances: 0, deductions: 0, netSalary: 0 };
     }
-    return currentMonthData.reduce((acc, payroll) => {
+    return combinedData.reduce((acc, payroll) => {
         acc.baseSalary += payroll.baseSalary;
         acc.allowances += payroll.allowances;
         acc.deductions += payroll.deductions;
         acc.netSalary += payroll.netSalary;
         return acc;
     }, { baseSalary: 0, allowances: 0, deductions: 0, netSalary: 0 });
-  }, [currentMonthData]);
+  }, [combinedData]);
 
   const monthName = new Intl.DateTimeFormat('ar-EG', { month: 'long' }).format(currentDate);
   const year = currentDate.getFullYear();
+  
+  const isLoading = isUserLoading || isLoadingPayrolls || isLoadingEmployees;
+
+  if (isUserLoading) {
+     return (
+        <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+    );
+  }
+
+  if (!canView) {
+      return (
+          <Alert variant="destructive">
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>وصول مرفوض</AlertTitle>
+              <AlertDescription>
+                  ليس لديك الصلاحية لعرض هذه الصفحة.
+              </AlertDescription>
+          </Alert>
+      );
+  }
 
 
   return (
@@ -115,7 +169,7 @@ export default function PayrollPage() {
                 <FileDigit className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">{currentMonthData.length}</div>
+                <div className="text-2xl font-bold">{combinedData.length}</div>
             </CardContent>
         </Card>
       </div>
@@ -141,7 +195,12 @@ export default function PayrollPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {currentMonthData.length === 0 ? (
+          {isLoading ? (
+             <div className="text-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+                <p className="mt-2 text-muted-foreground">جاري تحميل بيانات الرواتب...</p>
+             </div>
+          ) : combinedData.length === 0 ? (
              <div className="text-center py-12 text-muted-foreground">
                 <p>لا توجد بيانات رواتب لهذا الشهر.</p>
                 <p className="text-sm">يمكنك إنشاء تقرير جديد من الزر أعلاه.</p>
@@ -151,7 +210,7 @@ export default function PayrollPage() {
             {/* Mobile View */}
             <div className="md:hidden">
                 <div className="space-y-4">
-                {currentMonthData.map((payroll) => (
+                {combinedData.map((payroll) => (
                     <Card key={payroll.id} className="bg-muted/50">
                     <CardHeader className="p-4">
                         <div className="flex justify-between items-center">
@@ -198,7 +257,7 @@ export default function PayrollPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {currentMonthData.map((payroll) => (
+                    {combinedData.map((payroll) => (
                     <TableRow key={payroll.id}>
                         <TableCell className="font-medium">{payroll.employeeName}</TableCell>
                         <TableCell>{formatCurrency(payroll.baseSalary)}</TableCell>

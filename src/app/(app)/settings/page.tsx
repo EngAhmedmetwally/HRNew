@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, PlusCircle, Trash2, LocateFixed, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Trash2, LocateFixed, Loader2, ShieldAlert } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -20,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useDoc, useFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface DeductionLevel {
   id: string;
@@ -28,11 +31,7 @@ interface DeductionLevel {
   deductionValue: number;
 }
 
-export default function SettingsPage() {
-  const { toast } = useToast();
-  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
-  
-  const [settings, setSettings] = useState({
+const defaultSettings = {
     checkInTime: '09:00',
     checkOutTime: '17:00',
     qrRefreshRate: 60,
@@ -40,12 +39,38 @@ export default function SettingsPage() {
     locationLat: '24.7136',
     locationLng: '46.6753',
     allowedRadius: 500,
-  });
+    deductionLevels: [
+      { id: '1', minutes: 30, deductionType: 'minutes' as 'minutes', deductionValue: 30 },
+      { id: '2', minutes: 60, deductionType: 'hours' as 'hours', deductionValue: 1 },
+    ]
+};
 
-  const [deductionLevels, setDeductionLevels] = useState<DeductionLevel[]>([
-      { id: '1', minutes: 30, deductionType: 'minutes', deductionValue: 30 },
-      { id: '2', minutes: 60, deductionType: 'hours', deductionValue: 1 },
-  ]);
+
+export default function SettingsPage() {
+  const { toast } = useToast();
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+  const { firestore } = useFirebase();
+  const { user, roles, isUserLoading } = useUser();
+  const canView = roles.isAdmin;
+
+  const settingsDocRef = useMemoFirebase(() => {
+    if (!firestore || !canView) return null;
+    return doc(firestore, 'settings', 'global');
+  }, [firestore, canView]);
+
+  const { data: storedSettings, isLoading: isLoadingSettings } = useDoc(settingsDocRef);
+
+  const [settings, setSettings] = useState(defaultSettings.settings);
+  const [deductionLevels, setDeductionLevels] = useState<DeductionLevel[]>(defaultSettings.deductionLevels);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  useEffect(() => {
+    if (storedSettings) {
+        setSettings(storedSettings.settings);
+        setDeductionLevels(storedSettings.deductionLevels);
+    }
+  }, [storedSettings]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -112,12 +137,19 @@ export default function SettingsPage() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // In a real app, you would save these settings to a database.
-    console.log({ settings, deductionLevels });
-    toast({
-      title: 'تم حفظ الإعدادات',
-      description: 'تم تحديث إعدادات النظام بنجاح.',
-    });
+    if (!settingsDocRef) return;
+    setIsSaving(true);
+    const dataToSave = { settings, deductionLevels };
+    
+    updateDocumentNonBlocking(settingsDocRef, dataToSave);
+
+    setTimeout(() => { // Simulate save time for visual feedback
+        toast({
+            title: 'تم حفظ الإعدادات',
+            description: 'تم تحديث إعدادات النظام بنجاح.',
+        });
+        setIsSaving(false);
+    }, 1000);
   };
 
   const getDeductionUnit = (type: 'minutes' | 'hours' | 'amount') => {
@@ -126,6 +158,28 @@ export default function SettingsPage() {
       case 'hours': return 'ساعة';
       case 'amount': return 'جنيه';
     }
+  }
+
+  const isLoading = isUserLoading || isLoadingSettings;
+
+  if (isLoading) {
+    return (
+        <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+    );
+  }
+
+  if (!canView) {
+      return (
+          <Alert variant="destructive">
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>وصول مرفوض</AlertTitle>
+              <AlertDescription>
+                  ليس لديك الصلاحية لعرض هذه الصفحة.
+              </AlertDescription>
+          </Alert>
+      );
   }
 
   return (
@@ -320,8 +374,8 @@ export default function SettingsPage() {
         </div>
 
         <div className="mt-6 flex justify-end">
-          <Button type="submit">
-            <Save className="ml-2 h-4 w-4" />
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
             حفظ التغييرات
           </Button>
         </div>

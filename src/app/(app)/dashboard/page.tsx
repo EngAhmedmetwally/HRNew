@@ -23,8 +23,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
 import { collection, query, where, Timestamp } from "firebase/firestore";
 import type { WorkDay, Employee } from "@/lib/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { findImage } from "@/lib/placeholder-images";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -43,25 +44,25 @@ const statusMap = {
 
 export default function DashboardPage() {
     const { firestore } = useFirebase();
-    const { user, isUserLoading } = useUser();
+    const { user, roles, isUserLoading } = useUser();
+
+    const canView = roles.isAdmin || roles.isHr;
 
     const dailyWorkDaysQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
+        if (!firestore || !user || !canView) return null;
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
         const startOfDayTimestamp = Timestamp.fromDate(startOfDay);
 
-        // Since Firestore paths are /{year}/{month}/{day}/{employeeId} we cannot query just for a day.
-        // We have to query the root `workDays` collection.
         return query(collection(firestore, 'workDays'), where('checkInTime', '>=', startOfDayTimestamp));
-    }, [firestore, user]);
+    }, [firestore, user, canView]);
     
     const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(dailyWorkDaysQuery);
 
     const employeesQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
+        if (!firestore || !user || !canView) return null;
         return collection(firestore, 'employees');
-    }, [firestore, user]);
+    }, [firestore, user, canView]);
 
     const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
@@ -76,7 +77,27 @@ export default function DashboardPage() {
         }));
     }, [workDays, employees]);
 
-    const isLoading = isUserLoading || isLoadingWorkDays || isLoadingEmployees;
+    const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full">
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <Alert variant="destructive">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>وصول مرفوض</AlertTitle>
+                <AlertDescription>
+                    ليس لديك الصلاحية لعرض هذه الصفحة.
+                </AlertDescription>
+            </Alert>
+        );
+    }
 
   return (
     <div className="flex-1 space-y-4 md:space-y-8">

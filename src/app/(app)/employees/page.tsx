@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PlusCircle, Pencil, Loader2 } from "lucide-react";
+import { PlusCircle, Pencil, Loader2, ShieldAlert } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +30,7 @@ import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase
 import { collection } from "firebase/firestore";
 import type { Employee } from "@/lib/types";
 import { findImage } from "@/lib/placeholder-images";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
 const statusMap = {
@@ -40,14 +41,39 @@ const statusMap = {
 
 export default function EmployeesPage() {
   const { firestore } = useFirebase();
-  const { user } = useUser();
+  const { user, roles, isUserLoading } = useUser();
+  
+  const canView = roles.isAdmin || roles.isHr;
 
   const employeesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !canView) return null;
     return collection(firestore, 'employees');
-  }, [firestore, user]);
+  }, [firestore, user, canView]);
   
-  const { data: employees, isLoading } = useCollection<Employee>(employeesQuery);
+  const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
+
+  const isLoading = isUserLoading || (canView && isLoadingEmployees);
+
+  if (isLoading) {
+    return (
+        <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+        <Alert variant="destructive">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertTitle>وصول مرفوض</AlertTitle>
+            <AlertDescription>
+                ليس لديك الصلاحية لعرض هذه الصفحة.
+            </AlertDescription>
+        </Alert>
+    );
+  }
+
 
   return (
     <TooltipProvider>

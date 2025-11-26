@@ -12,22 +12,33 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthBackground } from "@/components/auth/fingerprint-animation";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useFirebase, useFirestore } from "@/firebase/provider";
+import { useFirebase, useUser } from "@/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
+import { AuthBackground } from "@/components/auth/auth-background";
 
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, firestore } = useFirebase(); // Get the auth instance
+  const { auth, firestore } = useFirebase();
+  const { user, roles, isUserLoading } = useUser();
+
+   useEffect(() => {
+    if (!isUserLoading && user) {
+        if (roles.isAdmin || roles.isHr) {
+            router.replace('/dashboard');
+        } else {
+            router.replace('/scan');
+        }
+    }
+  }, [user, roles, isUserLoading, router]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -47,57 +58,66 @@ export default function LoginPage() {
     const employeeId = formData.get("employeeId") as string;
     const password = formData.get("password") as string;
 
-    if (employeeId === 'admin' && password === '123456') {
-       // Simulate Super Admin Login
-        toast({
-            title: "تم تسجيل الدخول بنجاح",
-            description: "مرحبًا بك أيها المشرف الخارق!",
-        });
-        router.push('/splash');
-        return;
-    }
-
     try {
-        // 1. Find the employee by employeeId
         const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-            throw new Error("auth/user-not-found");
-        }
+            // Special case for super admin login if no document found
+            if (employeeId === 'admin' && password === '123456') {
+                await signInWithEmailAndPassword(auth, 'admin@hr-pulse.system', password);
+            } else {
+                throw new Error("auth/user-not-found");
+            }
+        } else {
+            const employeeDoc = querySnapshot.docs[0];
+            const employeeData = employeeDoc.data() as Employee;
+            const email = (employeeData as any).email; 
 
-        // 2. Get the user's email from the doc
-        const employeeDoc = querySnapshot.docs[0];
-        const employeeData = employeeDoc.data() as Employee;
-        const email = (employeeData as any).email; // The email is stored in the doc
-
-        if (!email) {
-            throw new Error("auth/invalid-credential");
+            if (!email) {
+                throw new Error("auth/invalid-credential");
+            }
+            await signInWithEmailAndPassword(auth, email, password);
         }
-        
-      // 3. Sign in with the retrieved email and provided password
-      await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged in the provider will handle the user state.
+      
       toast({
         title: "تم تسجيل الدخول بنجاح",
         description: "مرحبًا بك مرة أخرى!",
       });
-      router.push('/splash');
+      // The useEffect will handle the redirect
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من رقم الموظف وكلمة المرور.";
-      if (error.message === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.message === 'auth/user-not-found') {
         description = "رقم الموظف أو كلمة المرور غير صحيحة.";
+      }
+       if (error.code === 'auth/invalid-email') {
+        description = "حساب المدير الخارق غير موجود. يرجى التأكد من تشغيل الإعداد الأولي.";
       }
       toast({
         variant: "destructive",
         title: "فشل تسجيل الدخول",
         description: description,
       });
-      setIsLoading(false);
-    } 
-    // No finally block to set isLoading to false, because the splash screen handles the visual loading state.
+    } finally {
+        setIsLoading(false);
+    }
   };
+  
+   // Show a loading state while checking for an existing session
+   if (isUserLoading || user) {
+        return (
+             <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
+                <AuthBackground />
+                <div className="absolute top-8 flex items-center gap-2 text-lg font-semibold text-foreground">
+                    <Building className="h-6 w-6" />
+                    <span>HR Pulse</span>
+                </div>
+                <p>جاري التحقق من جلسة الدخول...</p>
+            </div>
+        )
+   }
+
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">

@@ -1,3 +1,5 @@
+'use client';
+
 import Link from "next/link";
 import {
   CreditCard,
@@ -8,6 +10,8 @@ import {
   Building,
   QrCode,
   Camera,
+  LogOut,
+  User,
 } from "lucide-react";
 import {
   Sidebar as AppSidebar,
@@ -19,8 +23,37 @@ import {
   SidebarFooter,
   SidebarGroup,
 } from "@/components/ui/sidebar";
+import { useUser, useFirebase } from "@/firebase";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "../ui/button";
+
+const menuItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ['admin', 'hr'] },
+    { href: "/employees", icon: Users, label: "الموظفين", roles: ['admin', 'hr'] },
+    { href: "/attendance", icon: ScanLine, label: "سجل الحضور", roles: ['admin', 'hr'] },
+    { href: "/attendance/qr", icon: QrCode, label: "إنشاء QR Code", roles: ['admin', 'hr'] },
+    { href: "/scan", icon: Camera, label: "مسح QR", roles: ['admin', 'hr', 'employee'] },
+    { href: "/payroll", icon: CreditCard, label: "الرواتب", roles: ['admin', 'hr'] },
+    { href: "/settings", icon: Settings, label: "الإعدادات", roles: ['admin'] },
+];
 
 export function Sidebar() {
+    const { auth } = useFirebase();
+    const { user, roles, isUserLoading } = useUser();
+
+    const handleLogout = () => {
+        auth.signOut();
+    };
+
+    const accessibleMenuItems = menuItems.filter(item => {
+        if (!item.roles || item.roles.length === 0) return true; // Public item
+        if (!user) return false; // Must be logged in for role-based items
+        if (roles.isAdmin) return true; // Admin sees everything
+        if (roles.isHr && (item.roles.includes('hr') || item.roles.includes('employee'))) return true;
+        if (item.roles.includes('employee')) return true;
+        return false;
+    });
+
   return (
     <AppSidebar side="right" variant="sidebar" collapsible="icon">
       <SidebarHeader className="h-16 justify-center">
@@ -34,88 +67,50 @@ export function Sidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip={{ children: "لوحة التحكم", side: "left" }}
-                isActive
-              >
-                <Link href="/dashboard">
-                  <LayoutDashboard />
-                  <span>لوحة التحكم</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip={{ children: "الموظفين", side: "left" }}
-              >
-                <Link href="/employees">
-                  <Users />
-                  <span>الموظفين</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip={{ children: "سجل الحضور", side: "left" }}
-              >
-                <Link href="/attendance">
-                  <ScanLine />
-                  <span>سجل الحضور</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip={{ children: "إنشاء QR Code", side: "left" }}
-              >
-                <Link href="/attendance/qr">
-                  <QrCode />
-                  <span>إنشاء QR Code</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip={{ children: "مسح QR", side: "left" }}
-              >
-                <Link href="/scan">
-                  <Camera />
-                  <span>مسح QR</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip={{ children: "الرواتب", side: "left" }}
-              >
-                <Link href="/payroll">
-                  <CreditCard />
-                  <span>الرواتب</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              tooltip={{ children: "الإعدادات", side: "left" }}
-            >
-              <Link href="/settings">
-                <Settings />
-                <span>الإعدادات</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+            {isUserLoading ? (
+                 <>
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                 </>
+            ) : (
+                accessibleMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                        asChild
+                        tooltip={{ children: item.label, side: "left" }}
+                    >
+                        <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                        </Link>
+                    </SidebarMenuButton>
+                    </SidebarMenuItem>
+                ))
+            )}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2">
+         {user && (
+            <div className="w-full flex flex-col items-center gap-2 p-2">
+                 <SidebarMenu className="w-full">
+                     <SidebarMenuItem>
+                        <SidebarMenuButton
+                            asChild
+                            tooltip={{ children: "تسجيل الخروج", side: "left" }}
+                            onClick={handleLogout}
+                            className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+                        >
+                            <a>
+                                <LogOut />
+                                <span>تسجيل الخروج</span>
+                            </a>
+                        </SidebarMenuButton>
+                     </SidebarMenuItem>
+                 </SidebarMenu>
+            </div>
+        )}
       </SidebarFooter>
     </AppSidebar>
   );

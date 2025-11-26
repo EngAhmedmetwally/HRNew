@@ -20,8 +20,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import type { WorkDay, Employee } from '@/lib/types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import { findImage } from '@/lib/placeholder-images';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -40,22 +41,24 @@ const statusMap = {
 
 export default function AttendanceLogPage() {
   const { firestore } = useFirebase();
-  const { user, isUserLoading } = useUser();
+  const { user, roles, isUserLoading } = useUser();
+
+  const canView = roles.isAdmin || roles.isHr;
 
   const workDaysQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !canView) return null;
     return query(
       collection(firestore, 'workDays'),
       orderBy('checkInTime', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, user, canView]);
 
   const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(workDaysQuery);
   
   const employeesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !canView) return null;
     return collection(firestore, 'employees');
-  }, [firestore, user]);
+  }, [firestore, user, canView]);
 
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
@@ -70,7 +73,27 @@ export default function AttendanceLogPage() {
     }));
   }, [workDays, employees]);
 
-  const isLoading = isLoadingWorkDays || isLoadingEmployees || isUserLoading;
+  const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
+
+  if (isLoading) {
+    return (
+        <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+        <Alert variant="destructive">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertTitle>وصول مرفوض</AlertTitle>
+            <AlertDescription>
+                ليس لديك الصلاحية لعرض هذه الصفحة.
+            </AlertDescription>
+        </Alert>
+    );
+  }
 
   return (
     <Card>

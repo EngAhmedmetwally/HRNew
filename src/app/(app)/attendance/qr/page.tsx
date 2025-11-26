@@ -9,23 +9,28 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useFirebase } from "@/firebase/provider";
+import { useFirebase, useUser } from "@/firebase";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 // This would come from settings in a real app
 const QR_VALIDITY_SECONDS = 5;
 
 export default function QrCodePage() {
   const { firestore } = useFirebase();
+  const { user, roles, isUserLoading } = useUser();
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [countdown, setCountdown] = useState(QR_VALIDITY_SECONDS);
   const [isLoading, setIsLoading] = useState(true);
   const timerRef = useRef<NodeJS.Timeout>();
   const isMountedRef = useRef(true);
+  
+  const canView = roles.isAdmin || roles.isHr;
 
   const generateQrCode = useCallback(async () => {
-    if (!firestore || !isMountedRef.current) return;
+    if (!firestore || !isMountedRef.current || !canView) return;
     
     // Set loading to true only if it's not the initial load, to avoid flicker
     if (qrCodeUrl) {
@@ -69,12 +74,14 @@ export default function QrCodePage() {
         timerRef.current = setTimeout(generateQrCode, QR_VALIDITY_SECONDS * 1000);
       }
     }
-  }, [firestore, qrCodeUrl]);
+  }, [firestore, qrCodeUrl, canView]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    if (firestore) {
+    if (firestore && canView) {
       generateQrCode();
+    } else if (!isUserLoading) {
+        setIsLoading(false);
     }
 
     return () => {
@@ -83,7 +90,7 @@ export default function QrCodePage() {
         clearTimeout(timerRef.current);
       }
     };
-  }, [firestore, generateQrCode]);
+  }, [firestore, generateQrCode, canView, isUserLoading]);
 
   useEffect(() => {
     if (isLoading || !qrCodeUrl) return;
@@ -94,6 +101,28 @@ export default function QrCodePage() {
 
     return () => clearInterval(countdownTimer);
   }, [isLoading, qrCodeUrl]);
+
+  if (isUserLoading) {
+    return (
+        <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+        <div className="flex justify-center items-center h-full p-4">
+            <Alert variant="destructive" className="max-w-md w-full">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>وصول مرفوض</AlertTitle>
+                <AlertDescription>
+                    ليس لديك الصلاحية لعرض هذه الصفحة.
+                </AlertDescription>
+            </Alert>
+        </div>
+    );
+  }
 
 
   return (
