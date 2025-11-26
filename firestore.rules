@@ -194,7 +194,8 @@ service cloud.firestore {
      * @principle Enforces separation of duties; role management is an Admin-only function.
      */
     match /roles_hr/{uid} {
-      allow get, list: if isHrOrAdmin();
+      allow get: if isSignedIn();
+      allow list: if isHrOrAdmin();
       allow create, update, delete: if isAdmin();
     }
   }
