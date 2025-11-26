@@ -42,11 +42,11 @@ interface MenuItem {
     href: string;
     icon: LucideIcon;
     label: string;
-    permissionKey: keyof Omit<UserPermissions, 'isAdmin'>; // The key in the permissions object
+    permissionKey: keyof Omit<UserPermissions, 'isAdmin' | 'isHr'>; // The key in the permissions object
 }
 
 // Map href to a unique permission key. Keep this flat.
-export const menuItems = [
+export const menuItems: Omit<MenuItem, 'permissionKey'> & {permissionKey: string}[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", permissionKey: "dashboard" as const },
     { href: "/employees", icon: Users, label: "الموظفين", permissionKey: "employees" as const },
     { href: "/attendance", icon: ScanLine, label: "سجل الحضور", permissionKey: "attendance" as const },
@@ -70,11 +70,14 @@ export function Sidebar() {
 
     const accessibleMenuItems = menuItems.filter(item => {
         if (!user) return false;
+        
         // Admin can see everything
         if (permissions.isAdmin) return true;
-        // All users can scan
+        
+        // All non-admin employees can see the scan page by default
         if (item.permissionKey === 'scan') return true;
-        // Check if the user's permissions array includes the item's key
+
+        // For other screens, check the permissions array
         return permissions.screens.includes(item.permissionKey);
     });
     

@@ -10,9 +10,9 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Camera, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Camera, CheckCircle, XCircle, Loader2, Fingerprint, Info } from 'lucide-react';
 import jsQR from 'jsqr';
-import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirebase, useUser, useMemoFirebase, useDoc, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -28,6 +28,12 @@ export default function ScanPage() {
   const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+
+  const employeeDocRef = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return doc(firestore, 'employees', user.uid);
+  }, [firestore, user?.uid]);
+  const { data: employeeData } = useDoc<Employee>(employeeDocRef);
   
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -304,6 +310,33 @@ export default function ScanPage() {
            )}
         </div>
 
+        {user && (
+          <Card className="mt-4" dir="ltr">
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                User & Device Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0 text-xs text-muted-foreground space-y-2">
+               <div className="flex items-center gap-2">
+                  <Fingerprint className="h-4 w-4" />
+                  <p className="font-mono break-all">
+                    <span className="font-semibold text-foreground">UID:</span> {user.uid}
+                  </p>
+               </div>
+               {employeeData?.deviceId && (
+                  <div className="flex items-center gap-2">
+                      <Fingerprint className="h-4 w-4" />
+                      <p className="font-mono break-all">
+                         <span className="font-semibold text-foreground">Device:</span> {employeeData.deviceId}
+                      </p>
+                  </div>
+               )}
+            </CardContent>
+          </Card>
+        )}
+
         {hasCameraPermission === false && (
           <Alert variant="destructive" className="mt-4">
             <XCircle className="h-4 w-4" />
@@ -329,5 +362,3 @@ export default function ScanPage() {
     </Card>
   );
 }
-
-    
