@@ -29,7 +29,7 @@ import Link from 'next/link';
 import { useParams, notFound, useRouter } from 'next/navigation';
 import { Switch } from '@/components/ui/switch';
 import { useDoc, useFirebase, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import {
   Select,
@@ -119,21 +119,24 @@ export default function EditEmployeePage() {
 
     updateDocumentNonBlocking(employeeDocRef, employeeData);
 
-    // Update roles
+    // Securely update roles
     const adminRoleRef = doc(firestore, 'roles_admin', employeeId);
     const hrRoleRef = doc(firestore, 'roles_hr', employeeId);
 
+    const operations = [];
+    
+    // Always remove from both first to handle demotions
+    operations.push(deleteDoc(adminRoleRef));
+    operations.push(deleteDoc(hrRoleRef));
+    
+    await Promise.all(operations);
+    
+    // Then add to the correct role collection if not 'employee'
     if (role === 'admin') {
       await setDoc(adminRoleRef, { uid: employeeId });
-      await setDoc(hrRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(hrRoleRef, { uid: null }));
     } else if (role === 'hr') {
       await setDoc(hrRoleRef, { uid: employeeId });
-      await setDoc(adminRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(adminRoleRef, { uid: null }));
-    } else {
-      await setDoc(adminRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(adminRoleRef, { uid: null }));
-      await setDoc(hrRoleRef, {}, { merge: true }).then(() => updateDocumentNonBlocking(hrRoleRef, { uid: null }));
     }
-
 
     toast({
       title: 'تم تحديث بيانات الموظف بنجاح',
@@ -379,5 +382,3 @@ export default function EditEmployeePage() {
     </>
   );
 }
-
-    
