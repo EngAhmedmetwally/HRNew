@@ -45,6 +45,17 @@ export default function EmployeesPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
+
+  const handleOpenDialog = (employee?: Employee) => {
+    setEditingEmployee(employee);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingEmployee(undefined);
+  };
   
   const canView = roles.isAdmin || roles.isHr;
 
@@ -88,20 +99,10 @@ export default function EmployeesPage() {
               عرض وتعديل بيانات الموظفين في النظام.
             </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                  <Button className="w-full sm:w-auto">
-                      <PlusCircle className="ml-2 h-4 w-4" />
-                      إضافة موظف
-                  </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                  <DialogHeader>
-                      <DialogTitle>إضافة موظف جديد</DialogTitle>
-                  </DialogHeader>
-                  <EmployeeForm onFinish={() => setIsDialogOpen(false)} />
-              </DialogContent>
-          </Dialog>
+          <Button className="w-full sm:w-auto" onClick={() => handleOpenDialog()}>
+              <PlusCircle className="ml-2 h-4 w-4" />
+              إضافة موظف
+          </Button>
         </div>
         <Card>
           <CardHeader>
@@ -146,27 +147,17 @@ export default function EmployeesPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                                <Dialog>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <DialogTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <Pencil className="h-4 w-4" />
-                                                    <span className="sr-only">تعديل الموظف</span>
-                                                </Button>
-                                            </DialogTrigger>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>تعديل بيانات الموظف</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                    <DialogContent className="sm:max-w-[600px]">
-                                        <DialogHeader>
-                                            <DialogTitle>تعديل بيانات: {employee.name}</DialogTitle>
-                                        </DialogHeader>
-                                        <EmployeeForm employee={employee} onFinish={() => {}} />
-                                    </DialogContent>
-                                </Dialog>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(employee)}>
+                                            <Pencil className="h-4 w-4" />
+                                            <span className="sr-only">تعديل الموظف</span>
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>تعديل بيانات الموظف</p>
+                                    </TooltipContent>
+                                </Tooltip>
                             </TableCell>
                         </TableRow>
                         ))}
@@ -176,17 +167,24 @@ export default function EmployeesPage() {
                 <div className="text-center py-16 text-muted-foreground">
                     <p className="text-lg font-semibold">لم يتم العثور على موظفين</p>
                     <p className="text-sm mt-2">يمكنك إضافة موظف جديد لبدء إدارة فريقك.</p>
-                     <Button asChild className="mt-4">
-                        <DialogTrigger>
-                            <PlusCircle className="ml-2 h-4 w-4" />
-                            إضافة موظف جديد
-                        </DialogTrigger>
+                     <Button className="mt-4" onClick={() => handleOpenDialog()}>
+                        <PlusCircle className="ml-2 h-4 w-4" />
+                        إضافة موظف جديد
                     </Button>
                 </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+       <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+            <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                    <DialogTitle>{editingEmployee ? `تعديل بيانات: ${editingEmployee.name}` : 'إضافة موظف جديد'}</DialogTitle>
+                </DialogHeader>
+                <EmployeeForm employee={editingEmployee} onFinish={handleCloseDialog} />
+            </DialogContent>
+        </Dialog>
     </TooltipProvider>
   );
 }

@@ -115,6 +115,20 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 deviceId: employee.deviceId ?? '',
                 password: '', // Password is not fetched, only set
             });
+        } else {
+          form.reset({
+              name: '',
+              employeeId: '',
+              password: '',
+              jobTitle: '',
+              contractType: 'full-time',
+              hireDate: new Date().toISOString().split('T')[0],
+              baseSalary: 0,
+              status: 'active',
+              role: 'employee',
+              deviceVerificationEnabled: false,
+              deviceId: '',
+          });
         }
     }
     setFormValues();
