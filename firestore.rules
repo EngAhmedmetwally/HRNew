@@ -139,8 +139,8 @@ service cloud.firestore {
     }
     
     match /settings/{docId} {
-      // Allow HR and Admins to read settings for on-demand fetching in functions
-      allow get: if isHrOrAdmin();
+      // Allow any signed-in user to read settings for on-demand fetching in functions
+      allow get: if isSignedIn();
       // Only Admins can change settings
       allow list, create, update, delete: if isAdmin();
     }
@@ -203,5 +203,7 @@ service cloud.firestore {
     }
   }
 }
+
+    
 
     
