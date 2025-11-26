@@ -30,12 +30,6 @@ export default function ScanPage() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   
-  const employeeDocRef = useMemoFirebase(() => {
-    if(!firestore || !user) return null;
-    return doc(firestore, 'employees', user.uid);
-  }, [firestore, user]);
-  const { data: employee } = useDoc<Employee>(employeeDocRef);
-
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -94,16 +88,23 @@ export default function ScanPage() {
         return;
       };
 
-      if (!employee) {
-          toast({ variant: 'destructive', title: 'جاري تحميل البيانات', description: 'لم تكتمل بيانات الموظف بعد، يرجى المحاولة مرة أخرى بعد لحظات.' });
+      // Fetch employee and settings data on-demand to ensure freshness
+      const employeeDocRef = doc(firestore, 'employees', user.uid);
+      const settingsDocRef = doc(firestore, 'settings', 'global');
+
+      const [employeeSnap, settingsSnap] = await Promise.all([
+          getDoc(employeeDocRef),
+          getDoc(settingsDocRef)
+      ]);
+      
+      if (!employeeSnap.exists()) {
+          toast({ variant: 'destructive', title: 'خطأ في البيانات', description: 'لم يتم العثور على بيانات الموظف.' });
           return;
       }
+      const employee = employeeSnap.data() as Employee;
 
-      // Fetch settings on-demand inside the function
-      const settingsDocRef = doc(firestore, 'settings', 'global');
-      const settingsSnap = await getDoc(settingsDocRef);
       if (!settingsSnap.exists()) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم العثور على إعدادات النظام.' });
+        toast({ variant: 'destructive', title: 'خطأ في الإعدادات', description: 'لم يتم العثور على إعدادات النظام.' });
         return;
       }
       const storedSettings = settingsSnap.data();
@@ -173,7 +174,7 @@ export default function ScanPage() {
           toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
           setScanResult({ data: `عملية ناجحة`, message: successMessage });
       }
-  }, [firestore, user, employee, toast]);
+  }, [firestore, user, toast]);
 
 
   const handleSuccessfulScan = useCallback(async (qrId: string, qrToken: string) => {
