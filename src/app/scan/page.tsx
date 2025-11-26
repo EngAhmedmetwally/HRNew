@@ -119,7 +119,7 @@ export default function ScanPage() {
           const checkOutTime = now;
           const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
 
-          updateDoc(todayRecord.ref, {
+          await updateDoc(todayRecord.ref, {
               checkOutTime: Timestamp.fromDate(checkOutTime),
               totalWorkHours: workHours
           });
@@ -154,17 +154,20 @@ export default function ScanPage() {
           };
           
           const newWorkDayRef = doc(collection(firestore, 'workDays'));
-          setDoc(newWorkDayRef, workDayData);
+          await setDoc(newWorkDayRef, workDayData);
 
           const successMessage = `تم تسجيل حضورك بنجاح. دقائق التأخير: ${delayMinutes}`;
           toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
           setScanResult({ data: `عملية ناجحة`, message: successMessage });
       }
-  }, [firestore, user, employee]);
+  }, [firestore, user, employee, toast]);
 
 
   const handleSuccessfulScan = useCallback(async (qrId: string, qrToken: string) => {
-    if (!firestore || !user || !employee) return;
+    if (!firestore || !user || !employee) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'بيانات المستخدم غير مكتملة.' });
+        return;
+    }
     
     // 1. Validate QR Code from Firestore
     const qrDocRef = doc(firestore, "qrCodes", qrId);
@@ -185,7 +188,8 @@ export default function ScanPage() {
     
     // 2. Logic to record attendance
     await recordAttendance();
-  }, [firestore, user, employee, recordAttendance]);
+    
+  }, [firestore, user, employee, recordAttendance, toast]);
   
   useEffect(() => {
     let animationFrameId: number;
@@ -222,10 +226,14 @@ export default function ScanPage() {
       }
     };
 
-    animationFrameId = requestAnimationFrame(scan);
+    if (isScanning) {
+        animationFrameId = requestAnimationFrame(scan);
+    }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if(animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, [isScanning, handleSuccessfulScan]);
   
