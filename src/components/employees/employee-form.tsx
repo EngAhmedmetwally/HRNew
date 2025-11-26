@@ -140,6 +140,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         
         const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
         delete dataToUpdate.password;
+        delete dataToUpdate.employeeId; // <- This is the fix
         
         setDoc(employeeDocRef, dataToUpdate, { merge: true })
             .then(async () => {
