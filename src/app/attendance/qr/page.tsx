@@ -103,7 +103,8 @@ export default function QrCodePage() {
         clearTimeout(timerRef.current);
       }
     };
-  }, [firestore, generateQrCode, canView, isUserLoading, storedSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, canView, isUserLoading, storedSettings]);
 
   useEffect(() => {
     if (isLoading || !qrCodeUrl) return;
