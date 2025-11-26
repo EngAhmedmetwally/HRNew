@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
+import { useCollection, useFirebase, useMemoFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { collection, deleteDoc, doc } from "firebase/firestore";
 import { getAuth, deleteUser } from "firebase/auth";
 import type { Employee } from "@/lib/types";
@@ -89,7 +89,7 @@ export default function EmployeesPage() {
   const isLoading = isUserLoading || (canView && isLoadingEmployees);
 
   const handleDeleteEmployee = async (employeeToDelete: Employee) => {
-    if (!firestore) return;
+    if (!firestore || !auth) return;
     if (employeeToDelete.employeeId === 'admin') {
       toast({
         variant: "destructive",
@@ -99,27 +99,33 @@ export default function EmployeesPage() {
       return;
     }
 
-    try {
-      // Delete from Firestore
-      const employeeDocRef = doc(firestore, 'employees', employeeToDelete.id);
-      await deleteDoc(employeeDocRef);
-      
-      // Note: Deleting from Auth requires re-authentication or an admin SDK.
-      // This implementation will only delete from Firestore.
-      // For full deletion, a backend function is required to delete the Auth user.
-      toast({
-        title: 'تم حذف الموظف',
-        description: `تم حذف بيانات الموظف ${employeeToDelete.name} من قاعدة البيانات.`,
-        className: 'bg-green-500 text-white',
+    const employeeDocRef = doc(firestore, 'employees', employeeToDelete.id);
+    
+    // Use non-blocking delete with specific error handling
+    deleteDoc(employeeDocRef)
+      .then(() => {
+        toast({
+          title: 'تم حذف الموظف',
+          description: `تم حذف بيانات الموظف ${employeeToDelete.name} من قاعدة البيانات.`,
+          className: 'bg-green-500 text-white',
+        });
+        // Note: Deleting from Auth requires re-authentication or an admin SDK.
+        // This implementation will only delete from Firestore.
+        // For full deletion, a backend function is required to delete the Auth user.
+      })
+      .catch((error) => {
+        // Emit a detailed, contextual error for the development overlay
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: employeeDocRef.path,
+          operation: 'delete',
+        }));
+        // Show a generic message to the user
+        toast({
+          variant: "destructive",
+          title: 'فشل الحذف',
+          description: 'حدث خطأ أثناء حذف الموظف. قد لا تملك الصلاحيات الكافية.',
+        });
       });
-    } catch (error) {
-       console.error("Error deleting employee: ", error);
-       toast({
-        variant: "destructive",
-        title: 'فشل الحذف',
-        description: 'حدث خطأ أثناء حذف الموظف.',
-      });
-    }
   };
 
 
