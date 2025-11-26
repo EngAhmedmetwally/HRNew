@@ -100,13 +100,15 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                     userPermissions.screens = employeeData.permissions || [];
                 }
 
+                // Correctly set the entire auth state including the fetched permissions
                 setUserAuthState({ user: firebaseUser, permissions: userPermissions, isUserLoading: false, userError: null });
             } catch (error) {
                 console.error("FirebaseProvider: Error fetching user permissions:", error);
-                // Set default (non-privileged) permissions on error
+                // Set default (non-privileged) permissions on error, but keep the user object
                  setUserAuthState({ user: firebaseUser, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: error as Error });
             }
         } else {
+            // No user is signed in
             setUserAuthState({ user: null, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: null });
         }
       },
@@ -199,8 +201,11 @@ export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | 
  * @returns {UserHookResult} Object with user, permissions, isUserLoading, userError.
  */
 export const useUser = (): UserHookResult => {
-  const { user, permissions, isUserLoading, userError } = useFirebase();
-  return { user, permissions, isUserLoading, userError };
+  const context = useContext(FirebaseContext);
+    if (context === undefined) {
+    throw new Error('useUser must be used within a FirebaseProvider.');
+  }
+  return { user: context.user, permissions: context.permissions, isUserLoading: context.isUserLoading, userError: context.userError };
 };
 
 // Add this interface to define the props for FirebaseProvider
