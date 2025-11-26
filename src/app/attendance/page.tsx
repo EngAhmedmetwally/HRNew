@@ -15,11 +15,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import type { WorkDay, Employee } from '@/lib/types';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert, Fingerprint } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useMemo, useState, useEffect } from 'react';
 import { DateRangePicker } from '@/components/shared/date-range-picker';
@@ -120,111 +121,134 @@ export default function AttendanceLogPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>سجل الحضور والانصراف</CardTitle>
-            <CardDescription>
-              عرض وتصفية سجلات الحضور لجميع الموظفين.
-            </CardDescription>
-          </div>
-          <DateRangePicker dateRange={dateRange} onUpdate={setDateRange} />
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center items-center h-48">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : combinedData.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-             <p>لا توجد سجلات حضور في هذا النطاق الزمني.</p>
-          </div>
-        ) : (
-          <>
-            {/* Mobile View */}
-             <div className="md:hidden">
-                <div className="space-y-4">
-                  {combinedData.map((record) => (
-                      <Card key={record.id} className="bg-muted/50">
-                        <CardHeader className="p-4 flex flex-row items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {record.employee ? (
-                                <CardTitle className="text-lg">{record.employee.name}</CardTitle>
-                              ) : (
-                                  <CardTitle className="text-lg">{record.employeeId}</CardTitle>
-                              )}
+    <TooltipProvider>
+      <Card>
+        <CardHeader className="flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>سجل الحضور والانصراف</CardTitle>
+              <CardDescription>
+                عرض وتصفية سجلات الحضور لجميع الموظفين.
+              </CardDescription>
+            </div>
+            <DateRangePicker dateRange={dateRange} onUpdate={setDateRange} />
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-48">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : combinedData.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+               <p>لا توجد سجلات حضور في هذا النطاق الزمني.</p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile View */}
+               <div className="md:hidden">
+                  <div className="space-y-4">
+                    {combinedData.map((record) => (
+                        <Card key={record.id} className="bg-muted/50">
+                          <CardHeader className="p-4 flex flex-row items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                {record.employee ? (
+                                  <CardTitle className="text-lg">{record.employee.name}</CardTitle>
+                                ) : (
+                                    <CardTitle className="text-lg">{record.employeeId}</CardTitle>
+                                )}
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}
+                              >
+                                {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
+                              </Badge>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0 text-sm">
+                            <div className="flex justify-between border-t pt-2 mt-2">
+                                <p className="text-muted-foreground">وقت الحضور</p>
+                                <p className="font-semibold">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</p>
                             </div>
-                            <Badge
-                              variant="secondary"
-                              className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}
-                            >
-                              {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
-                            </Badge>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 text-sm">
-                          <div className="flex justify-between border-t pt-2 mt-2">
-                              <p className="text-muted-foreground">وقت الحضور</p>
-                              <p className="font-semibold">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</p>
-                          </div>
-                          <div className="flex justify-between mt-2">
-                              <p className="text-muted-foreground">وقت الانصراف</p>
-                              <p>{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                  ))}
-                </div>
-            </div>
+                            <div className="flex justify-between mt-2">
+                                <p className="text-muted-foreground">وقت الانصراف</p>
+                                <p>{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</p>
+                            </div>
+                             {record.attestationDeviceId && (
+                                <div className="flex justify-between mt-2 border-t pt-2">
+                                    <p className="text-muted-foreground flex items-center gap-1"><Fingerprint className="h-3 w-3" /> الجهاز</p>
+                                    <p className="font-mono text-xs">{record.attestationDeviceId}</p>
+                                </div>
+                             )}
+                          </CardContent>
+                        </Card>
+                    ))}
+                  </div>
+              </div>
 
-            {/* Desktop View */}
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">الموظف</TableHead>
-                    <TableHead className="text-right">وقت الحضور</TableHead>
-                    <TableHead className="text-right">وقت الانصراف</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
+              {/* Desktop View */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center">
-                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                      <TableHead className="text-right">الموظف</TableHead>
+                      <TableHead className="text-right">وقت الحضور</TableHead>
+                      <TableHead className="text-right">وقت الانصراف</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">الجهاز المستخدم</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                          <TableCell colSpan={5} className="h-24 text-center">
+                              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                          </TableCell>
+                      </TableRow>
+                    ) : combinedData.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell>
+                          <div className="font-medium text-right">{record.employee?.name || record.employeeId}</div>
                         </TableCell>
-                    </TableRow>
-                  ) : combinedData.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell>
-                        <div className="font-medium text-right">{record.employee?.name || record.employeeId}</div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge
-                          variant="secondary"
-                          className={
-                            record.delayMinutes > 0
-                              ? statusMap.late.className
-                              : statusMap['on-time'].className
-                          }
-                        >
-                          {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+                        <TableCell className="text-right">
+                          {record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge
+                            variant="secondary"
+                            className={
+                              record.delayMinutes > 0
+                                ? statusMap.late.className
+                                : statusMap['on-time'].className
+                            }
+                          >
+                            {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {record.attestationDeviceId ? (
+                             <Tooltip>
+                                <TooltipTrigger>
+                                  <span>...{record.attestationDeviceId.slice(-10)}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{record.attestationDeviceId}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                          ) : (
+                            <span className="text-muted-foreground">--</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }

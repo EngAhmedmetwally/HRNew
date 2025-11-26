@@ -47,4 +47,5 @@ export interface WorkDay {
     totalWorkHours: number;
     delayMinutes: number;
     overtimeHours: number;
+    attestationDeviceId?: string; // Device fingerprint used for check-in/out
 }

@@ -17,6 +17,24 @@ import { doc, getDoc, setDoc, getDocs, collection, query, where, Timestamp, upda
 import type { Employee } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
+// Function to generate a simple device fingerprint
+const getDeviceFingerprint = () => {
+    const navigator = window.navigator;
+    const screen = window.screen;
+    let fingerprint = navigator.userAgent;
+    fingerprint += `|${screen.height}x${screen.width}`;
+    fingerprint += `|${navigator.language}`;
+    fingerprint += `|${new Date().getTimezoneOffset()}`;
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < fingerprint.length; i++) {
+        const char = fingerprint.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(16); // Convert to hex
+};
+
 
 export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -87,6 +105,7 @@ export default function ScanPage() {
         throw new Error('لم يتم العثور على جلسة مستخدم صالحة.');
     };
 
+    const attestationDeviceId = getDeviceFingerprint();
     const employeeDocRef = doc(firestore, 'employees', user.uid);
     const settingsDocRef = doc(firestore, 'settings', 'global');
     
@@ -138,7 +157,8 @@ export default function ScanPage() {
 
         const updateData = {
             checkOutTime: Timestamp.fromDate(checkOutTime),
-            totalWorkHours: workHours
+            totalWorkHours: workHours,
+            attestationDeviceId: attestationDeviceId,
         };
 
         await updateDoc(todayRecord.ref, updateData).catch(e => {
@@ -169,7 +189,8 @@ export default function ScanPage() {
             checkOutTime: null,
             totalWorkHours: 0,
             delayMinutes: delayMinutes,
-            overtimeHours: 0
+            overtimeHours: 0,
+            attestationDeviceId: attestationDeviceId,
         };
         
         const newWorkDayRef = doc(collection(firestore, 'workDays'));
@@ -362,5 +383,3 @@ export default function ScanPage() {
     </Card>
   );
 }
-
-    

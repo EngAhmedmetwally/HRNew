@@ -152,6 +152,10 @@
         "overtimeHours": {
           "type": "number",
           "description": "Number of overtime hours."
+        },
+        "attestationDeviceId": {
+            "type": "string",
+            "description": "The device fingerprint captured during the attendance check-in or check-out action."
         }
       },
       "required": [
