@@ -17,10 +17,23 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser } from "@/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
+
+
+// Function to generate a simple device fingerprint
+const getDeviceFingerprint = () => {
+    const navigator = window.navigator;
+    const screen = window.screen;
+    let fingerprint = navigator.userAgent;
+    fingerprint += `|${screen.height}x${screen.width}`;
+    fingerprint += `|${navigator.language}`;
+    fingerprint += `|${new Date().getTimezoneOffset()}`;
+    return fingerprint;
+};
 
 
 export default function LoginPage() {
@@ -63,7 +76,44 @@ export default function LoginPage() {
     const email = `${employeeId}@hr-pulse.system`;
 
     try {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const loggedInUser = userCredential.user;
+
+        // Fetch employee data to check for device verification
+        const employeeDocRef = doc(firestore, 'employees', loggedInUser.uid);
+        const employeeDocSnap = await getDoc(employeeDocRef);
+
+        if (!employeeDocSnap.exists()) {
+             throw new Error("لم يتم العثور على بيانات الموظف.");
+        }
+
+        const employeeData = employeeDocSnap.data() as Employee;
+
+        // Device Verification Logic
+        if (employeeData.deviceVerificationEnabled) {
+            const currentDeviceFingerprint = getDeviceFingerprint();
+            
+            if (employeeData.deviceId) {
+                // Device is already registered, check if it matches
+                if (employeeData.deviceId !== currentDeviceFingerprint) {
+                    toast({
+                        variant: "destructive",
+                        title: "فشل تسجيل الدخول",
+                        description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب.",
+                    });
+                    await signOut(auth); // Sign out the user immediately
+                    setIsLoading(false);
+                    return;
+                }
+            } else {
+                // First time login after enabling verification, register this device
+                await updateDoc(employeeDocRef, { deviceId: currentDeviceFingerprint });
+                toast({
+                    title: "تم تسجيل الجهاز",
+                    description: "تم ربط هذا الجهاز بحسابك بنجاح.",
+                });
+            }
+        }
 
         toast({
             title: "تم تسجيل الدخول بنجاح",
@@ -77,6 +127,8 @@ export default function LoginPage() {
       let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
+      } else if (error.message) {
+        description = error.message;
       }
       toast({
         variant: "destructive",
