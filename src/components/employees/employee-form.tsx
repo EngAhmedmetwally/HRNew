@@ -228,13 +228,14 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
 
             // 2. Prepare Firestore document with the correct ID
             const { role, password, ...employeeData } = data;
-            const employeeDocData: Omit<Employee, 'id'> = {
+            const employeeDocData: Omit<Employee, 'id'> & { id: string } = {
                 ...employeeData,
+                id: newAuthUid,
             };
 
             // 3. Set the Firestore document with the correct UID
             const employeeDocRef = doc(firestore, 'employees', newAuthUid);
-            await setDoc(employeeDocRef, { ...employeeDocData, id: newAuthUid })
+            await setDoc(employeeDocRef, employeeDocData)
                 .catch(error => {
                     errorEmitter.emit(
                         'permission-error',
@@ -562,3 +563,5 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     </Form>
   );
 }
+
+    
