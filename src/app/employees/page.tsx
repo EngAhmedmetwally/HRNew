@@ -178,7 +178,7 @@ export default function EmployeesPage() {
       </div>
 
        <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{editingEmployee ? `تعديل بيانات: ${editingEmployee.name}` : 'إضافة موظف جديد'}</DialogTitle>
                 </DialogHeader>

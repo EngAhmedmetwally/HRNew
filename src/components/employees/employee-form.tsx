@@ -224,279 +224,277 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   }
 
   return (
-    <ScrollArea className="max-h-[70vh] sm:max-h-none">
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-1 pr-4">
-            <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>الاسم الكامل</FormLabel>
-                    <FormControl>
-                    <Input placeholder="مثال: أحمد علي" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="employeeId"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>اسم المستخدم (رقم الموظف)</FormLabel>
-                    <FormControl>
-                    <Input placeholder="مثال: E006" {...field} disabled={isEditMode} />
-                    </FormControl>
-                    <FormDescription>
-                        معرف فريد. لا يمكن تغييره بعد الإنشاء.
-                    </FormDescription>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>كلمة المرور</FormLabel>
-                    <FormControl>
-                    <Input type="password" {...field} placeholder={isEditMode ? 'اتركه فارغًا لعدم التغيير' : ''} />
-                    </FormControl>
-                     <FormDescription>
-                        {isEditMode ? "أدخل كلمة مرور جديدة لتحديثها." : "يجب أن تكون 6 أحرف على الأقل."}
-                    </FormDescription>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="jobTitle"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>المنصب الوظيفي</FormLabel>
-                    <FormControl>
-                        <Input placeholder="مثال: مدير مبيعات" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            <FormField
-                control={form.control}
-                name="contractType"
-                render={({ field }) => (
-                    <FormItem className="space-y-3">
-                    <FormLabel>نوع العقد</FormLabel>
-                    <FormControl>
-                        <RadioGroup
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        className="flex items-center gap-4"
-                        >
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                            <RadioGroupItem value="full-time" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                            دوام كامل
-                            </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                            <RadioGroupItem value="part-time" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                            دوام جزئي
-                            </FormLabel>
-                        </FormItem>
-                        </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-
-                {contractType === 'part-time' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
-                         <FormField
-                            control={form.control}
-                            name="customCheckInTime"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>وقت الحضور المخصص</FormLabel>
-                                <FormControl>
-                                <Input type="time" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="customCheckOutTime"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>وقت الانصراف المخصص</FormLabel>
-                                <FormControl>
-                                <Input type="time" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                    </div>
-                )}
-
-            <FormField
-                control={form.control}
-                name="hireDate"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>تاريخ التعيين</FormLabel>
-                    <FormControl>
-                        <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            <FormField
-                control={form.control}
-                name="baseSalary"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>الراتب الأساسي (EGP)</FormLabel>
-                    <FormControl>
-                        <Input type="number" placeholder="مثال: 5000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                    <FormItem className="space-y-3">
-                    <FormLabel>حالة الحساب</FormLabel>
-                    <FormControl>
-                        <RadioGroup
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        className="flex flex-wrap items-center gap-4"
-                        >
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                            <RadioGroupItem value="active" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                            نشط
-                            </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                            <RadioGroupItem value="on_leave" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                            في إجازة
-                            </FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                            <RadioGroupItem value="inactive" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                            غير نشط
-                            </FormLabel>
-                        </FormItem>
-                        </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>الصلاحية</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder="اختر صلاحية للموظف" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        <SelectItem value="employee">موظف</SelectItem>
-                        <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
-                        <SelectItem value="admin">مدير نظام</SelectItem>
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
+    <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-1 pr-4">
+        <FormField
             control={form.control}
-            name="deviceVerificationEnabled"
+            name="name"
             render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                <FormLabel className="text-base">
-                    تفعيل التحقق من الجهاز
-                </FormLabel>
-                <FormDescription>
-                    هل يتطلب من الموظف تسجيل الدخول من جهاز معين؟
-                </FormDescription>
-                </div>
+            <FormItem>
+                <FormLabel>الاسم الكامل</FormLabel>
                 <FormControl>
-                <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                />
+                <Input placeholder="مثال: أحمد علي" {...field} />
                 </FormControl>
+                <FormMessage />
             </FormItem>
             )}
-            />
-            {isEditMode && deviceVerificationEnabled && (
-                <FormField
-                    control={form.control}
-                    name="deviceId"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>معرف الجهاز المسجل</FormLabel>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                        <FormControl>
-                            <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" />
-                        </FormControl>
-                        <Button type="button" variant="secondary" onClick={handleResetDeviceId} disabled={!field.value}>
-                            <RotateCw className="ml-2 h-4 w-4" />
-                            إعادة تعيين
-                        </Button>
-                        </div>
-                        <FormDescription>
-                        يتم تسجيل الجهاز تلقائياً عند أول عملية تسجيل دخول ناجحة.
-                        </FormDescription>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-            />
+        />
+        <FormField
+            control={form.control}
+            name="employeeId"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>اسم المستخدم (رقم الموظف)</FormLabel>
+                <FormControl>
+                <Input placeholder="مثال: E006" {...field} disabled={isEditMode} />
+                </FormControl>
+                <FormDescription>
+                    معرف فريد. لا يمكن تغييره بعد الإنشاء.
+                </FormDescription>
+                <FormMessage />
+            </FormItem>
             )}
-            
-            <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                <Save className="ml-2 h-4 w-4" />
-                {isEditMode ? 'حفظ التعديلات' : 'حفظ الموظف'}
-                </Button>
+        />
+        <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>كلمة المرور</FormLabel>
+                <FormControl>
+                <Input type="password" {...field} placeholder={isEditMode ? 'اتركه فارغًا لعدم التغيير' : ''} />
+                </FormControl>
+                    <FormDescription>
+                    {isEditMode ? "أدخل كلمة مرور جديدة لتحديثها." : "يجب أن تكون 6 أحرف على الأقل."}
+                </FormDescription>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+            <FormField
+            control={form.control}
+            name="jobTitle"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>المنصب الوظيفي</FormLabel>
+                <FormControl>
+                    <Input placeholder="مثال: مدير مبيعات" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        <FormField
+            control={form.control}
+            name="contractType"
+            render={({ field }) => (
+                <FormItem className="space-y-3">
+                <FormLabel>نوع العقد</FormLabel>
+                <FormControl>
+                    <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="flex items-center gap-4"
+                    >
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                        <RadioGroupItem value="full-time" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                        دوام كامل
+                        </FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                        <RadioGroupItem value="part-time" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                        دوام جزئي
+                        </FormLabel>
+                    </FormItem>
+                    </RadioGroup>
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
+            {contractType === 'part-time' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
+                        <FormField
+                        control={form.control}
+                        name="customCheckInTime"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>وقت الحضور المخصص</FormLabel>
+                            <FormControl>
+                            <Input type="time" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                        <FormField
+                        control={form.control}
+                        name="customCheckOutTime"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>وقت الانصراف المخصص</FormLabel>
+                            <FormControl>
+                            <Input type="time" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                </div>
+            )}
+
+        <FormField
+            control={form.control}
+            name="hireDate"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>تاريخ التعيين</FormLabel>
+                <FormControl>
+                    <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        <FormField
+            control={form.control}
+            name="baseSalary"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>الراتب الأساسي (EGP)</FormLabel>
+                <FormControl>
+                    <Input type="number" placeholder="مثال: 5000" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+                <FormItem className="space-y-3">
+                <FormLabel>حالة الحساب</FormLabel>
+                <FormControl>
+                    <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="flex flex-wrap items-center gap-4"
+                    >
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                        <RadioGroupItem value="active" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                        نشط
+                        </FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                        <RadioGroupItem value="on_leave" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                        في إجازة
+                        </FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                        <RadioGroupItem value="inactive" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                        غير نشط
+                        </FormLabel>
+                    </FormItem>
+                    </RadioGroup>
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        <FormField
+            control={form.control}
+            name="role"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>الصلاحية</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                    <SelectTrigger>
+                    <SelectValue placeholder="اختر صلاحية للموظف" />
+                    </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                    <SelectItem value="employee">موظف</SelectItem>
+                    <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
+                    <SelectItem value="admin">مدير نظام</SelectItem>
+                </SelectContent>
+                </Select>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        <FormField
+        control={form.control}
+        name="deviceVerificationEnabled"
+        render={({ field }) => (
+        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+            <FormLabel className="text-base">
+                تفعيل التحقق من الجهاز
+            </FormLabel>
+            <FormDescription>
+                هل يتطلب من الموظف تسجيل الدخول من جهاز معين؟
+            </FormDescription>
             </div>
-            </form>
-        </Form>
-    </ScrollArea>
+            <FormControl>
+            <Switch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+            />
+            </FormControl>
+        </FormItem>
+        )}
+        />
+        {isEditMode && deviceVerificationEnabled && (
+            <FormField
+                control={form.control}
+                name="deviceId"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>معرف الجهاز المسجل</FormLabel>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                    <FormControl>
+                        <Input {...field} readOnly placeholder="لم يتم تسجيل أي جهاز بعد" />
+                    </FormControl>
+                    <Button type="button" variant="secondary" onClick={handleResetDeviceId} disabled={!field.value}>
+                        <RotateCw className="ml-2 h-4 w-4" />
+                        إعادة تعيين
+                    </Button>
+                    </div>
+                    <FormDescription>
+                    يتم تسجيل الجهاز تلقائياً عند أول عملية تسجيل دخول ناجحة.
+                    </FormDescription>
+                    <FormMessage />
+                </FormItem>
+                )}
+        />
+        )}
+        
+        <div className="flex justify-end pt-4">
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+            <Save className="ml-2 h-4 w-4" />
+            {isEditMode ? 'حفظ التعديلات' : 'حفظ الموظف'}
+            </Button>
+        </div>
+        </form>
+    </Form>
   );
 }
