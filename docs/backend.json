@@ -34,6 +34,16 @@
           "type": "string",
           "description": "Type of contract the employee has (e.g., full-time, part-time)."
         },
+        "customCheckInTime": {
+            "type": "string",
+            "description": "Custom check-in time for part-time employees (e.g., '10:00').",
+            "format": "time"
+        },
+        "customCheckOutTime": {
+            "type": "string",
+            "description": "Custom check-out time for part-time employees (e.g., '16:00').",
+            "format": "time"
+        },
         "hireDate": {
           "type": "string",
           "description": "Date when the employee was hired.",

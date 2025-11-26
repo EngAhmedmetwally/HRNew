@@ -125,8 +125,11 @@ export default function ScanPage() {
           setScanResult({ data: `عملية ناجحة`, message: successMessage });
 
       } else { // No record, so this is a check-in
-          const { gracePeriod, checkInTime } = storedSettings.settings;
-          const [hours, minutes] = checkInTime.split(':').map(Number);
+          const isPartTimeWithCustomTime = employee.contractType === 'part-time' && employee.customCheckInTime;
+          const checkInTimeSetting = isPartTimeWithCustomTime ? employee.customCheckInTime! : storedSettings.settings.checkInTime;
+          
+          const { gracePeriod } = storedSettings.settings;
+          const [hours, minutes] = checkInTimeSetting.split(':').map(Number);
           
           const checkInDeadline = new Date(now);
           checkInDeadline.setHours(hours, minutes + (gracePeriod || 0), 0, 0);

@@ -10,6 +10,8 @@ export interface Employee {
   department: string;
   jobTitle: string;
   contractType: 'full-time' | 'part-time';
+  customCheckInTime?: string; // e.g., "09:30"
+  customCheckOutTime?: string; // e.g., "15:30"
   hireDate: string; // ISO date string
   status: 'active' | 'on_leave' | 'inactive';
   baseSalary: number;

@@ -39,6 +39,8 @@ const employeeFormSchema = z.object({
   password: z.string().optional(), // Optional for edit mode
   jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
+  customCheckInTime: z.string().optional(),
+  customCheckOutTime: z.string().optional(),
   hireDate: z.string().min(1, { message: 'تاريخ التعيين مطلوب' }),
   baseSalary: z.coerce.number().min(0, { message: 'الراتب يجب أن يكون رقماً موجباً' }),
   status: z.enum(['active', 'inactive', 'on_leave'], { required_error: 'الحالة مطلوبة' }),
@@ -76,6 +78,8 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
       password: '',
       jobTitle: '',
       contractType: 'full-time',
+      customCheckInTime: '',
+      customCheckOutTime: '',
       hireDate: new Date().toISOString().split('T')[0],
       baseSalary: 0,
       status: 'active',
@@ -107,6 +111,8 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 employeeId: employee.employeeId,
                 jobTitle: employee.jobTitle,
                 contractType: employee.contractType,
+                customCheckInTime: employee.customCheckInTime || '',
+                customCheckOutTime: employee.customCheckOutTime || '',
                 hireDate: employee.hireDate,
                 baseSalary: employee.baseSalary,
                 status: employee.status,
@@ -122,6 +128,8 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
               password: '',
               jobTitle: '',
               contractType: 'full-time',
+              customCheckInTime: '',
+              customCheckOutTime: '',
               hireDate: new Date().toISOString().split('T')[0],
               baseSalary: 0,
               status: 'active',
@@ -135,6 +143,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   }, [employee, isEditMode, form, firestore]);
   
   const deviceVerificationEnabled = form.watch('deviceVerificationEnabled');
+  const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
     if (isEditMode) {
@@ -162,6 +171,11 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
       
       const email = `${data.employeeId}@hr-pulse.system`;
       const { password, role, ...employeeData } = data;
+
+      if (data.contractType === 'full-time') {
+          employeeData.customCheckInTime = '';
+          employeeData.customCheckOutTime = '';
+      }
 
       if (!password) { // Should be validated by schema, but as a safeguard
         form.setError('password', { message: 'كلمة المرور مطلوبة لإنشاء موظف جديد.'});
@@ -214,6 +228,11 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
 
     const employeeDocRef = doc(firestore, 'employees', employee.id);
     const { role, password, ...employeeData } = data; // Exclude password and role
+
+    if (data.contractType === 'full-time') {
+        employeeData.customCheckInTime = '';
+        employeeData.customCheckOutTime = '';
+    }
 
     try {
         await setDoc(employeeDocRef, employeeData, { merge: true });
@@ -347,6 +366,38 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                     </FormItem>
                 )}
                 />
+
+                {contractType === 'part-time' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
+                         <FormField
+                            control={form.control}
+                            name="customCheckInTime"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>وقت الحضور المخصص</FormLabel>
+                                <FormControl>
+                                <Input type="time" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="customCheckOutTime"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>وقت الانصراف المخصص</FormLabel>
+                                <FormControl>
+                                <Input type="time" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    </div>
+                )}
+
             <FormField
                 control={form.control}
                 name="hireDate"
