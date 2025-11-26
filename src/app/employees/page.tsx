@@ -1,7 +1,6 @@
 'use client';
 
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -31,6 +30,9 @@ import { collection } from "firebase/firestore";
 import type { Employee } from "@/lib/types";
 import { findImage } from "@/lib/placeholder-images";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { EmployeeForm } from "@/components/employees/employee-form";
 
 
 const statusMap = {
@@ -42,6 +44,7 @@ const statusMap = {
 export default function EmployeesPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
   const canView = roles.isAdmin || roles.isHr;
 
@@ -85,12 +88,20 @@ export default function EmployeesPage() {
               عرض وتعديل بيانات الموظفين في النظام.
             </p>
           </div>
-          <Button asChild className="w-full sm:w-auto">
-            <Link href="/employees/new">
-              <PlusCircle className="ml-2 h-4 w-4" />
-              إضافة موظف
-            </Link>
-          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                  <Button className="w-full sm:w-auto">
+                      <PlusCircle className="ml-2 h-4 w-4" />
+                      إضافة موظف
+                  </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                  <DialogHeader>
+                      <DialogTitle>إضافة موظف جديد</DialogTitle>
+                  </DialogHeader>
+                  <EmployeeForm onFinish={() => setIsDialogOpen(false)} />
+              </DialogContent>
+          </Dialog>
         </div>
         <Card>
           <CardHeader>
@@ -130,24 +141,32 @@ export default function EmployeesPage() {
                             <TableCell className="hidden sm:table-cell text-right">{employee.employeeId}</TableCell>
                             <TableCell className="hidden md:table-cell text-right">{employee.jobTitle}</TableCell>
                             <TableCell className="text-right">
-                              <Badge variant={statusMap[employee.status]?.variant as any} className={statusMap[employee.status]?.className}>
-                                  {statusMap[employee.status]?.text}
+                              <Badge variant={statusMap[employee.status as keyof typeof statusMap]?.variant as any} className={statusMap[employee.status as keyof typeof statusMap]?.className}>
+                                  {statusMap[employee.status as keyof typeof statusMap]?.text}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button asChild variant="ghost" size="icon">
-                                            <Link href={`/employees/${employee.id}/edit`}>
-                                                <Pencil className="h-4 w-4" />
-                                                <span className="sr-only">تعديل الموظف</span>
-                                            </Link>
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>تعديل بيانات الموظف</p>
-                                    </TooltipContent>
-                                </Tooltip>
+                                <Dialog>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <DialogTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <Pencil className="h-4 w-4" />
+                                                    <span className="sr-only">تعديل الموظف</span>
+                                                </Button>
+                                            </DialogTrigger>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>تعديل بيانات الموظف</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <DialogContent className="sm:max-w-[600px]">
+                                        <DialogHeader>
+                                            <DialogTitle>تعديل بيانات: {employee.name}</DialogTitle>
+                                        </DialogHeader>
+                                        <EmployeeForm employee={employee} onFinish={() => {}} />
+                                    </DialogContent>
+                                </Dialog>
                             </TableCell>
                         </TableRow>
                         ))}
@@ -158,10 +177,10 @@ export default function EmployeesPage() {
                     <p className="text-lg font-semibold">لم يتم العثور على موظفين</p>
                     <p className="text-sm mt-2">يمكنك إضافة موظف جديد لبدء إدارة فريقك.</p>
                      <Button asChild className="mt-4">
-                        <Link href="/employees/new">
-                        <PlusCircle className="ml-2 h-4 w-4" />
-                        إضافة موظف جديد
-                        </Link>
+                        <DialogTrigger>
+                            <PlusCircle className="ml-2 h-4 w-4" />
+                            إضافة موظف جديد
+                        </DialogTrigger>
                     </Button>
                 </div>
             )}
