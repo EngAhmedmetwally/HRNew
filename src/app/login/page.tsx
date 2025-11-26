@@ -31,6 +31,8 @@ export default function LoginPage() {
   const { user, roles, isUserLoading } = useUser();
 
    useEffect(() => {
+    // This effect now handles all redirection logic post-login.
+    // It waits until the user state and roles are confirmed.
     if (!isUserLoading && user) {
         if (roles.isAdmin || roles.isHr) {
             router.replace('/dashboard');
@@ -59,30 +61,20 @@ export default function LoginPage() {
     const password = formData.get("password") as string;
 
     try {
+        let authSuccessful = false;
         if (employeeId === 'admin' && password === '123456') {
             const adminEmail = 'admin@hr-pulse.system';
             try {
-                // Try to sign in first
                 await signInWithEmailAndPassword(auth, adminEmail, password);
-
+                authSuccessful = true;
             } catch (error: any) {
-                 // If user does not exist, create it. Handles both error codes for robustness.
                 if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
                     await createUserWithEmailAndPassword(auth, adminEmail, password);
-                    // The onAuthStateChanged listener in the provider will handle role setting
+                    authSuccessful = true;
                 } else {
-                    // Re-throw other errors
                     throw error;
                 }
             }
-            
-            toast({
-              title: "تم تسجيل الدخول بنجاح",
-              description: "مرحبًا بك مرة أخرى أيها المدير!",
-            });
-            // The useEffect hook will handle redirection to /dashboard
-            router.replace('/dashboard');
-
         } else {
             const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
             const querySnapshot = await getDocs(q);
@@ -99,12 +91,18 @@ export default function LoginPage() {
                 throw new Error("auth/invalid-credential");
             }
             await signInWithEmailAndPassword(auth, email, password);
+            authSuccessful = true;
+        }
+
+        if (authSuccessful) {
              toast({
                 title: "تم تسجيل الدخول بنجاح",
-                description: "مرحبًا بك مرة أخرى!",
+                description: "جاري توجيهك...",
              });
-             // The useEffect will handle the redirect for regular users
+             // ALWAYS redirect to splash page. The useEffect will handle the final destination.
+             router.replace('/splash');
         }
+
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من رقم الموظف وكلمة المرور.";
@@ -119,13 +117,13 @@ export default function LoginPage() {
         title: "فشل تسجيل الدخول",
         description: description,
       });
-    } finally {
-        setIsLoading(false);
+      setIsLoading(false); // Only set loading to false on error
     }
+    // Do not set isLoading to false on success, as the page will redirect.
   };
   
    // Show a loading state while checking for an existing session
-   if (isUserLoading || user) {
+   if (isUserLoading) {
         return (
              <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
                 <AuthBackground />
@@ -134,6 +132,17 @@ export default function LoginPage() {
                     <span>HR Pulse</span>
                 </div>
                 <p>جاري التحقق من جلسة الدخول...</p>
+            </div>
+        )
+   }
+   
+   // If user is already logged in, the useEffect will redirect them. 
+   // While waiting for redirect, show a minimal loading state.
+   if (user) {
+        return (
+             <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
+                <AuthBackground />
+                <p>تم تسجيل الدخول. جاري التوجيه...</p>
             </div>
         )
    }

@@ -4,17 +4,29 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthBackground } from '@/components/auth/auth-background';
 import { Building, Loader2 } from 'lucide-react';
+import { useUser } from '@/firebase';
 
 export default function SplashPage() {
   const router = useRouter();
+  const { user, roles, isUserLoading } = useUser();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace('/dashboard');
-    }, 2500); // Wait for 2.5 seconds before redirecting
-
-    return () => clearTimeout(timer);
-  }, [router]);
+    // This component's only job is to wait for the user state to be confirmed
+    // and then redirect. The actual redirection logic is now inside the login page's
+    // useEffect hook, making this component a simple "wait and see".
+    if (!isUserLoading) {
+      if (user) {
+        if (roles.isAdmin || roles.isHr) {
+          router.replace('/dashboard');
+        } else {
+          router.replace('/scan');
+        }
+      } else {
+        // If for some reason auth fails, send back to login.
+        router.replace('/login');
+      }
+    }
+  }, [user, roles, isUserLoading, router]);
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
