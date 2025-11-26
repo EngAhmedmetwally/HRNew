@@ -142,34 +142,45 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role, ...employeeData } = data;
+        const { role: newRole, ...employeeData } = data;
         
         if (!employeeData.password) {
             delete (employeeData as Partial<typeof employeeData>).password; // Don't update password if it's empty
         }
         
-        if (!employeeData.deviceId) {
+        if (employeeData.deviceId === undefined || employeeData.deviceId === null || employeeData.deviceId === '') {
            delete (employeeData as {deviceId?: string}).deviceId;
         }
 
         try {
             await setDoc(employeeDocRef, employeeData, { merge: true });
-
-            // Handle roles
+            
+            // Smarter Role Handling
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
-            await Promise.all([deleteDoc(adminRoleRef), deleteDoc(hrRoleRef)]);
-            if (role === 'admin') {
-                await setDoc(adminRoleRef, { uid: employee.id });
-            } else if (role === 'hr') {
-                await setDoc(hrRoleRef, { uid: employee.id });
+
+            const [isAdmin, isHr] = await Promise.all([
+                getDoc(adminRoleRef).then(snap => snap.exists()),
+                getDoc(hrRoleRef).then(snap => snap.exists()),
+            ]);
+            
+            const currentRole = isAdmin ? 'admin' : isHr ? 'hr' : 'employee';
+
+            if(currentRole !== newRole) {
+                // Delete old role if it exists
+                if(currentRole === 'admin') await deleteDoc(adminRoleRef);
+                if(currentRole === 'hr') await deleteDoc(hrRoleRef);
+
+                // Add new role
+                if (newRole === 'admin') await setDoc(adminRoleRef, { uid: employee.id });
+                if (newRole === 'hr') await setDoc(hrRoleRef, { uid: employee.id });
             }
 
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error: any) {
             console.error("Error updating employee:", error);
-            toast({ variant: "destructive", title: 'فشل تحديث البيانات', description: 'حدث خطأ أثناء التحديث.' });
+            toast({ variant: "destructive", title: 'فشل تحديث البيانات', description: error.message || 'حدث خطأ أثناء التحديث.' });
         }
     } else {
         // Create new employee
@@ -202,7 +213,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             onFinish();
         } catch (error: any) {
             console.error("Employee Creation Error:", error);
-            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: "حدث خطأ غير متوقع." });
+            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message || "حدث خطأ غير متوقع." });
         }
     }
   }

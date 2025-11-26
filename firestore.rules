@@ -180,7 +180,8 @@ service cloud.firestore {
      * @principle Secures role-granting authority to the highest privilege level (self-management).
      */
     match /roles_admin/{uid} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get, list: if isHrOrAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
 
@@ -193,11 +194,8 @@ service cloud.firestore {
      * @principle Enforces separation of duties; role management is an Admin-only function.
      */
     match /roles_hr/{uid} {
-      allow get: if isHrOrAdmin();
-      allow list: if isHrOrAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if isHrOrAdmin();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
