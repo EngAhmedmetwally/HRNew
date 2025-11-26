@@ -5,7 +5,8 @@ export interface Employee {
   id: string; // Corresponds to Firebase Auth UID
   employeeId: string; // Custom employee ID used for login
   name: string;
-  department: string;
+  // department is not in the form, but in the backend.json. It should be removed from the type.
+  // department: string; 
   jobTitle: string;
   contractType: 'full-time' | 'part-time';
   customCheckInTime?: string;

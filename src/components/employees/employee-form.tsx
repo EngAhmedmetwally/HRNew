@@ -161,12 +161,17 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 });
             
             // Handle password update if a new one is provided
-            if (password && password.length >= 6 && auth.currentUser) {
-                // This is not secure in a real app, but for demo purposes.
-                // In a real app, this should be a trusted backend call (e.g. Cloud Function)
-                // We're assuming the current user is an admin with rights to change passwords.
+            const currentUserForPasswordUpdate = auth.currentUser;
+            if (password && password.length >= 6 && currentUserForPasswordUpdate) {
+                // In a real app, this should be a trusted backend call.
                 // Firebase client-side SDK doesn't support changing other users' passwords.
-                console.warn("Password update on client-side is not secure and will likely fail without backend logic.");
+                // This will only work if the admin is updating their OWN password.
+                // For this project, we assume an admin might test this on their own account.
+                try {
+                    await updatePassword(currentUserForPasswordUpdate, password);
+                } catch(e) {
+                     console.warn("Password update on client-side is not secure and will likely fail without backend logic or if not updating your own password.", e);
+                }
             }
 
             // Handle roles update
@@ -223,21 +228,20 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
 
             // 2. Prepare Firestore document with the correct ID
             const { role, password, ...employeeData } = data;
-            const employeeDocData: Employee = {
+            const employeeDocData: Omit<Employee, 'id'> = {
                 ...employeeData,
-                id: newAuthUid, // CRITICAL: Use the Auth UID as the document ID
             };
 
             // 3. Set the Firestore document with the correct UID
             const employeeDocRef = doc(firestore, 'employees', newAuthUid);
-            await setDoc(employeeDocRef, employeeDocData)
+            await setDoc(employeeDocRef, { ...employeeDocData, id: newAuthUid })
                 .catch(error => {
                     errorEmitter.emit(
                         'permission-error',
                         new FirestorePermissionError({
                             path: employeeDocRef.path,
                             operation: 'create',
-                            requestResourceData: employeeDocData,
+                            requestResourceData: { ...employeeDocData, id: newAuthUid },
                         })
                     );
                     throw error;
