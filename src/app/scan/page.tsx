@@ -212,7 +212,6 @@ export default function ScanPage() {
     } catch(error: any) {
         const errorMessage = error.message || 'حدث خطأ غير متوقع أثناء معالجة الكود.';
         setScanResult({data: 'فشل', message: errorMessage });
-        // The error is already emitted in the functions that throw it, so no need to log it here again.
     }
     
   }, [firestore, user, recordAttendance, toast]);
@@ -330,3 +329,5 @@ export default function ScanPage() {
     </Card>
   );
 }
+
+    
