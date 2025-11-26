@@ -77,7 +77,13 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       auth,
       async (firebaseUser) => { // Auth state determined
         if (firebaseUser) {
-            // Fetch user roles
+            // Hardcode admin role check without database lookup
+            if (firebaseUser.email === 'admin@hr-pulse.system') {
+                setUserAuthState({ user: firebaseUser, roles: { isAdmin: true, isHr: true }, isUserLoading: false, userError: null });
+                return;
+            }
+
+            // Fetch user roles for other users
             const adminRoleRef = doc(firestore, 'roles_admin', firebaseUser.uid);
             const hrRoleRef = doc(firestore, 'roles_hr', firebaseUser.uid);
             try {
