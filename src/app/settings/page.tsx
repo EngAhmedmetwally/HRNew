@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDoc, useFirebase, useMemoFirebase, useUser, setDocumentNonBlocking, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase, useUser } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -73,7 +73,7 @@ export default function SettingsPage() {
     } else if (!isLoadingSettings && canView && firestore) {
         // If no settings doc exists, create one with defaults
         const docRef = doc(firestore, 'settings', 'global');
-        setDocumentNonBlocking(docRef, defaultSettingsData, { merge: true });
+        setDoc(docRef, defaultSettingsData, { merge: true });
     }
   }, [storedSettings, isLoadingSettings, canView, firestore]);
 
@@ -206,7 +206,7 @@ export default function SettingsPage() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-8 grid-cols-1">
           <Card>
             <CardHeader>
               <CardTitle>إعدادات الحضور العامة</CardTitle>
@@ -307,7 +307,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2">
+          <Card>
             <CardHeader>
               <CardTitle>لائحة التأخير</CardTitle>
               <CardDescription>

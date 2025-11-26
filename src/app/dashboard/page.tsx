@@ -214,16 +214,10 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 space-y-4 md:space-y-8">
       <StatsCards />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-        <div className="lg:col-span-1">
-          <AnomalyDetector />
-        </div>
-        <div className="lg:col-span-1">
-          <AttendanceChart />
-        </div>
-        <div className="lg:col-span-1">
-           <DailyAttendanceLog combinedData={combinedData} isLoading={isLoading} />
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:gap-8">
+        <AnomalyDetector />
+        <AttendanceChart />
+        <DailyAttendanceLog combinedData={combinedData} isLoading={isLoading} />
       </div>
     </div>
   );

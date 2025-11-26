@@ -200,7 +200,7 @@ export default function EditEmployeePage() {
                 تفاصيل الحساب الأساسية للموظف.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-6 sm:grid-cols-2">
+            <CardContent className="grid gap-6 grid-cols-1">
               <FormField
                 control={form.control}
                 name="name"
@@ -257,7 +257,7 @@ export default function EditEmployeePage() {
                 control={form.control}
                 name="status"
                 render={({ field }) => (
-                  <FormItem className="space-y-3 sm:col-span-2">
+                  <FormItem className="space-y-3">
                     <FormLabel>حالة الحساب</FormLabel>
                     <FormControl>
                       <RadioGroup
@@ -305,7 +305,7 @@ export default function EditEmployeePage() {
                     إدارة صلاحيات الوصول وإعدادات الأمان الخاصة بالموظف.
                 </CardDescription>
             </CardHeader>
-            <CardContent className='grid gap-6'>
+            <CardContent className='grid gap-6 grid-cols-1'>
                  <FormField
                     control={form.control}
                     name="role"
