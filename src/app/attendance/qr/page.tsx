@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 
 export default function QrCodePage() {
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +34,7 @@ export default function QrCodePage() {
   const { data: storedSettings } = useDoc(settingsDocRef);
   const qrValiditySeconds = storedSettings?.settings?.qrRefreshRate || 10;
   
-  const canView = roles.isAdmin || roles.isHr;
+  const canView = permissions.isAdmin || permissions.screens.includes('attendance_qr');
 
   useEffect(() => {
     if (!isUserLoading && !user) {

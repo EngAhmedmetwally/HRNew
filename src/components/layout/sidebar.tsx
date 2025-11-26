@@ -3,16 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CreditCard,
-  LayoutDashboard,
-  ScanLine,
-  Settings,
-  Users,
-  QrCode,
-  Camera,
-  LogOut,
-  LucideIcon,
-  FileCheck2
+    CreditCard,
+    LayoutDashboard,
+    ScanLine,
+    Settings,
+    Users,
+    QrCode,
+    Camera,
+    LogOut,
+    LucideIcon,
+    FileCheck2
 } from "lucide-react";
 import {
   Sidebar as SidebarContainer,
@@ -24,7 +24,7 @@ import {
   SidebarFooter,
   useSidebar
 } from "@/components/ui/sidebar";
-import { useUser, useFirebase } from "@/firebase";
+import { useUser, useFirebase, UserPermissions } from "@/firebase";
 import { Button } from "../ui/button";
 import { FingerprintIcon } from "../auth/fingerprint-icon";
 import { cn } from "@/lib/utils";
@@ -42,23 +42,24 @@ interface MenuItem {
     href: string;
     icon: LucideIcon;
     label: string;
-    roles: ('admin' | 'hr' | 'employee')[];
+    permissionKey: keyof Omit<UserPermissions, 'isAdmin'>; // The key in the permissions object
 }
 
-export const menuItems: MenuItem[] = [
-    { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ['admin', 'hr'] },
-    { href: "/employees", icon: Users, label: "الموظفين", roles: ['admin', 'hr'] },
-    { href: "/attendance", icon: ScanLine, label: "سجل الحضور", roles: ['admin', 'hr'] },
-    { href: "/payroll", icon: CreditCard, label: "الرواتب", roles: ['admin', 'hr'] },
-    { href: "/payroll/paid", icon: FileCheck2, label: "الرواتب المدفوعة", roles: ['admin', 'hr'] },
-    { href: "/attendance/qr", icon: QrCode, label: "إنشاء QR Code", roles: ['admin', 'hr'] },
-    { href: "/scan", icon: Camera, label: "مسح QR", roles: ['admin', 'hr', 'employee'] },
-    { href: "/settings", icon: Settings, label: "الإعدادات", roles: ['admin'] },
+// Map href to a unique permission key. Keep this flat.
+export const menuItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", permissionKey: "dashboard" as const },
+    { href: "/employees", icon: Users, label: "الموظفين", permissionKey: "employees" as const },
+    { href: "/attendance", icon: ScanLine, label: "سجل الحضور", permissionKey: "attendance" as const },
+    { href: "/payroll", icon: CreditCard, label: "الرواتب", permissionKey: "payroll" as const },
+    { href: "/payroll/paid", icon: FileCheck2, label: "الرواتب المدفوعة", permissionKey: "payroll_paid" as const },
+    { href: "/attendance/qr", icon: QrCode, label: "إنشاء QR Code", permissionKey: "attendance_qr" as const },
+    { href: "/scan", icon: Camera, label: "مسح QR", permissionKey: "scan" as const },
+    { href: "/settings", icon: Settings, label: "الإعدادات", permissionKey: "settings" as const },
 ];
 
 export function Sidebar() {
     const { auth } = useFirebase();
-    const { user, roles, isUserLoading } = useUser();
+    const { user, permissions, isUserLoading } = useUser();
     const pathname = usePathname();
     const { isMobile } = useSidebar();
     const userAvatar = findImage("avatar6");
@@ -69,12 +70,20 @@ export function Sidebar() {
 
     const accessibleMenuItems = menuItems.filter(item => {
         if (!user) return false;
-        if (roles.isAdmin) return true;
-        const userRolesSet = new Set<string>();
-        if (roles.isHr) userRolesSet.add('hr');
-        userRolesSet.add('employee'); // All authenticated users are at least employees
-        return item.roles.some(requiredRole => userRolesSet.has(requiredRole));
+        // Admin can see everything
+        if (permissions.isAdmin) return true;
+        // All users can scan
+        if (item.permissionKey === 'scan') return true;
+        // Check if the user's permissions array includes the item's key
+        return permissions.screens.includes(item.permissionKey);
     });
+    
+    const getUserRoleName = () => {
+        if (permissions.isAdmin) return 'مدير النظام';
+        if (permissions.screens.length > 1) return 'موظف بصلاحيات';
+        return 'موظف';
+    }
+
 
   return (
     <SidebarContainer side="right" variant="sidebar" collapsible={isMobile ? "offcanvas" : "none"} className="bg-sidebar text-sidebar-foreground border-sidebar-border">
@@ -123,7 +132,7 @@ export function Sidebar() {
                     </Avatar>
                     <div className="flex flex-col items-start">
                        <span className="text-sm font-medium text-sidebar-foreground">{user.displayName || user.email?.split('@')[0]}</span>
-                       <span className="text-xs text-muted-foreground">{roles.isAdmin ? 'مدير' : roles.isHr ? 'موارد بشرية' : 'موظف'}</span>
+                       <span className="text-xs text-muted-foreground">{getUserRoleName()}</span>
                     </div>
                   </div>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />

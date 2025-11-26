@@ -50,8 +50,8 @@ export function AnomalyDetector() {
   );
   const [showResult, setShowResult] = useState(false);
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
-  const canView = roles.isAdmin || roles.isHr;
+  const { user, permissions, isUserLoading } = useUser();
+  const canView = permissions.isAdmin || permissions.screens.includes('dashboard');
 
   const employeesQuery = useMemoFirebase(() => {
     if (!firestore || !user || !canView) return null;

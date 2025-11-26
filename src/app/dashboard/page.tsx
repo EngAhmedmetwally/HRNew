@@ -135,10 +135,10 @@ function DailyAttendanceLog({ combinedData, isLoading }: { combinedData: Combine
 
 export default function DashboardPage() {
     const { firestore } = useFirebase();
-    const { user, roles, isUserLoading } = useUser();
+    const { user, permissions, isUserLoading } = useUser();
     const router = useRouter();
 
-    const canView = roles.isAdmin || roles.isHr;
+    const canView = permissions.isAdmin || permissions.screens.includes('dashboard');
 
     useEffect(() => {
         if (!isUserLoading && !user) {

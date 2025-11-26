@@ -32,10 +32,10 @@ import { useRouter } from 'next/navigation';
 export default function DatabaseManagementPage() {
   const { toast } = useToast();
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
-  const canView = roles.isAdmin;
+  const canView = permissions.isAdmin;
 
   useEffect(() => {
     if (!isUserLoading && !user) {

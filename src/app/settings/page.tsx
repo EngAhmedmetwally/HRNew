@@ -54,9 +54,9 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
   const router = useRouter();
-  const canView = roles.isAdmin;
+  const canView = permissions.isAdmin;
 
   const settingsDocRef = useMemoFirebase(() => {
     if (!firestore || !canView) return null;

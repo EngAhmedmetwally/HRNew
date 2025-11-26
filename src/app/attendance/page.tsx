@@ -44,7 +44,7 @@ const statusMap = {
 
 export default function AttendanceLogPage() {
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
   const router = useRouter();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -52,7 +52,7 @@ export default function AttendanceLogPage() {
     to: new Date(),
   });
 
-  const canView = roles.isAdmin || roles.isHr;
+  const canView = permissions.isAdmin || permissions.screens.includes('attendance');
 
   useEffect(() => {
     if (!isUserLoading && !user) {

@@ -16,6 +16,7 @@ export interface Employee {
   deviceVerificationEnabled?: boolean;
   deviceId?: string;
   password?: string; // For storing password in Firestore
+  permissions: string[]; // List of accessible screen keys (e.g., 'dashboard', 'employees')
 }
 
 

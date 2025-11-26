@@ -41,14 +41,14 @@ const formatCurrency = (amount: number) => {
 
 export default function PayrollPage() {
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
   const router = useRouter();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
 
-  const canView = roles.isAdmin || roles.isHr;
+  const canView = permissions.isAdmin || permissions.screens.includes('payroll');
 
   useEffect(() => {
     if (!isUserLoading && !user) {

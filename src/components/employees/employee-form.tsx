@@ -19,10 +19,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc, addDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { ScrollArea } from '../ui/scroll-area';
+import { menuItems } from '@/components/layout/sidebar';
+
+const availablePermissions = menuItems
+  .map(item => ({ id: item.href.replace('/', ''), label: item.label }))
+  .filter(p => p.id !== 'scan'); // 'scan' is for all employees
 
 // Unified schema for both create and edit
 const employeeFormSchema = z.object({
@@ -36,7 +42,7 @@ const employeeFormSchema = z.object({
   hireDate: z.string().min(1, { message: 'تاريخ التعيين مطلوب' }),
   baseSalary: z.coerce.number().min(0, { message: 'الراتب يجب أن يكون رقماً موجباً' }),
   status: z.enum(['active', 'inactive', 'on_leave'], { required_error: 'الحالة مطلوبة' }),
-  role: z.enum(['employee', 'hr', 'admin'], { required_error: 'الصلاحية مطلوبة' }),
+  permissions: z.array(z.string()).default([]),
   deviceVerificationEnabled: z.boolean().default(false),
   deviceId: z.string().optional(),
 }).refine(data => {
@@ -67,7 +73,7 @@ const defaultFormValues: Partial<EmployeeFormValues> = {
   hireDate: new Date().toISOString().split('T')[0],
   baseSalary: 0,
   status: 'active',
-  role: 'employee',
+  permissions: [],
   deviceVerificationEnabled: false,
   deviceId: '',
 };
@@ -83,88 +89,57 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   });
   
   useEffect(() => {
-    async function setFormValues() {
-        if (isEditMode && employee && firestore) {
-             let role = 'employee';
-             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
-             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
-             try {
-                const [adminSnap, hrSnap] = await Promise.all([getDoc(adminRoleRef), getDoc(hrRoleRef)]);
-                if (adminSnap.exists()) {
-                    role = 'admin';
-                } else if (hrSnap.exists()) {
-                    role = 'hr';
-                }
-             } catch (e) {
-                console.error("Could not fetch user roles", e);
-             }
-
-            form.reset({
-                ...defaultFormValues,
-                ...employee,
-                id: employee.id, // Explicitly set ID for edit mode
-                password: employee.password || '', // Set password from DB
-                role: role as 'employee' | 'hr' | 'admin',
-                customCheckInTime: employee.customCheckInTime || '',
-                customCheckOutTime: employee.customCheckOutTime || '',
-                deviceId: employee.deviceId || '',
-            });
-        } else {
-          form.reset(defaultFormValues);
-        }
+    if (isEditMode && employee) {
+        form.reset({
+            ...defaultFormValues,
+            ...employee,
+            id: employee.id, // Explicitly set ID for edit mode
+            password: '', // Always require re-entry or leave blank
+            permissions: employee.permissions || [],
+            customCheckInTime: employee.customCheckInTime || '',
+            customCheckOutTime: employee.customCheckOutTime || '',
+            deviceId: employee.deviceId || '',
+        });
+    } else {
+      form.reset(defaultFormValues);
     }
-    setFormValues();
-  }, [employee, isEditMode, form, firestore]);
+  }, [employee, isEditMode, form]);
   
   const deviceVerificationEnabled = form.watch('deviceVerificationEnabled');
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (!firestore) {
+    if (!firestore || !auth) {
         toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
         return;
     }
 
-    // Check for duplicate employeeId on create
-    if (!isEditMode) {
-        const q = query(collection(firestore, 'employees'), where('employeeId', '==', data.employeeId));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-            form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
-            return;
+    const processEmployee = async (employeeId: string, employeeData: any) => {
+        const { password, ...dataToSave } = employeeData;
+        const employeeDocRef = doc(firestore, 'employees', employeeId);
+
+        if (isEditMode) {
+             // If password field is empty, don't update it.
+            if (password) {
+                dataToSave.password = password;
+            }
+            await updateDoc(employeeDocRef, dataToSave).catch(e => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: dataToSave }));
+                throw e;
+            });
+        } else {
+             dataToSave.password = password;
+             await setDoc(employeeDocRef, dataToSave).catch(e => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'create', requestResourceData: dataToSave }));
+                throw e;
+            });
         }
-    }
+    };
 
 
     if (isEditMode && employee) {
-        // Update existing employee
-        const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role: newRole, ...employeeDataForUpdate } = data;
-        
         try {
-            // If password field is empty, don't update it.
-            if (!employeeDataForUpdate.password) {
-                delete (employeeDataForUpdate as Partial<EmployeeFormValues>).password;
-            }
-
-            await updateDoc(employeeDocRef, employeeDataForUpdate);
-            
-            // Handle roles update
-            const batch = writeBatch(firestore);
-            const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
-            const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
-
-            batch.delete(adminRoleRef);
-            batch.delete(hrRoleRef);
-
-            if (newRole === 'admin') {
-                batch.set(adminRoleRef, { uid: employee.id });
-            } else if (newRole === 'hr') {
-                batch.set(hrRoleRef, { uid: employee.id });
-            }
-            
-            await batch.commit();
-            
+            await processEmployee(employee.id, data);
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
@@ -173,18 +148,27 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         }
     } else {
         // Create new employee
-        const { id, role, ...employeeData } = data;
+        const { id, ...employeeData } = data;
+        const email = `${data.employeeId}@hr-pulse.system`;
         
         try {
-            // Just create the employee document in Firestore. No Auth user needed.
-            await addDoc(collection(firestore, 'employees'), employeeData);
+            // First, create the Auth user
+            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
+            const newUserId = userCredential.user.uid;
+
+            // Then, create the Firestore document with the new user's UID
+            await processEmployee(newUserId, employeeData);
             
             toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
             onFinish();
 
         } catch (error: any) {
              console.error("Create employee failed:", error);
-             toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
+              if (error.code === 'auth/email-already-in-use') {
+                form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
+            } else {
+                toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
+            }
         }
     }
   }
@@ -246,6 +230,59 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
               </FormItem>
               )}
           />
+
+          <FormField
+            control={form.control}
+            name="permissions"
+            render={() => (
+                <FormItem>
+                <div className="mb-4">
+                    <FormLabel className="text-base">صلاحيات الوصول للشاشات</FormLabel>
+                    <FormDescription>
+                    اختر الشاشات التي يمكن للموظف الوصول إليها.
+                    </FormDescription>
+                </div>
+                <div className='grid grid-cols-2 gap-4 rounded-lg border p-4'>
+                    {availablePermissions.map((item) => (
+                    <FormField
+                        key={item.id}
+                        control={form.control}
+                        name="permissions"
+                        render={({ field }) => {
+                        return (
+                            <FormItem
+                            key={item.id}
+                            className="flex flex-row items-start space-x-3 space-y-0"
+                            >
+                            <FormControl>
+                                <Checkbox
+                                checked={field.value?.includes(item.id)}
+                                onCheckedChange={(checked) => {
+                                    return checked
+                                    ? field.onChange([...(field.value || []), item.id])
+                                    : field.onChange(
+                                        field.value?.filter(
+                                        (value) => value !== item.id
+                                        )
+                                    )
+                                }}
+                                />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                                {item.label}
+                            </FormLabel>
+                            </FormItem>
+                        )
+                        }}
+                    />
+                    ))}
+                </div>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
+
           <FormField
               control={form.control}
               name="contractType"

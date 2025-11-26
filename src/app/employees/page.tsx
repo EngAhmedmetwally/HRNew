@@ -42,7 +42,7 @@ const statusMap = {
 
 export default function EmployeesPage() {
   const { firestore } = useFirebase();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, permissions, isUserLoading } = useUser();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const router = useRouter();
@@ -63,7 +63,7 @@ export default function EmployeesPage() {
     }
   }, [isUserLoading, user, router]);
   
-  const canView = roles.isAdmin || roles.isHr;
+  const canView = permissions.isAdmin || permissions.screens.includes('employees');
 
   const employeesQuery = useMemoFirebase(() => {
     if (!firestore || !canView) return null;

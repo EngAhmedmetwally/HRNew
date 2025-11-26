@@ -6,25 +6,19 @@ import { Firestore, doc, getDoc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
+import type { Employee } from '@/lib/types';
 
 
-interface FirebaseProviderProps {
-  children: ReactNode;
-  firebaseApp: FirebaseApp;
-  firestore: Firestore;
-  auth: Auth;
-}
-
-// User roles
-export interface UserRoles {
+// User permissions
+export interface UserPermissions {
     isAdmin: boolean;
-    isHr: boolean;
+    screens: string[];
 }
 
 // Internal state for user authentication
 interface UserAuthState {
   user: User | null;
-  roles: UserRoles;
+  permissions: UserPermissions;
   isUserLoading: boolean;
   userError: Error | null;
 }
@@ -61,7 +55,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 }) => {
   const [userAuthState, setUserAuthState] = useState<UserAuthState>({
     user: null,
-    roles: { isAdmin: false, isHr: false },
+    permissions: { isAdmin: false, screens: [] },
     isUserLoading: true, // Start loading until first auth event
     userError: null,
   });
@@ -69,11 +63,11 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
     if (!auth || !firestore) { 
-      setUserAuthState({ user: null, roles: { isAdmin: false, isHr: false }, isUserLoading: false, userError: new Error("Auth or Firestore service not provided.") });
+      setUserAuthState({ user: null, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: new Error("Auth or Firestore service not provided.") });
       return;
     }
 
-    setUserAuthState({ user: null, roles: { isAdmin: false, isHr: false }, isUserLoading: true, userError: null }); // Reset on auth instance change
+    setUserAuthState({ user: null, permissions: { isAdmin: false, screens: [] }, isUserLoading: true, userError: null }); // Reset on auth instance change
 
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -83,55 +77,42 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             if (firebaseUser.email === 'admin@hr-pulse.system') {
                 setUserAuthState({ 
                     user: firebaseUser, 
-                    roles: { isAdmin: true, isHr: true }, 
+                    permissions: { isAdmin: true, screens: [] }, 
                     isUserLoading: false, 
                     userError: null 
                 });
                 return; // Stop further checks for the admin
             }
             
-            // For custom DB auth, the doc ID is temporarily attached to the user object
-            const employeeIdToCheck = (firebaseUser as any).firestoreDocId || firebaseUser.uid;
-
-            // For all other users, fetch roles from Firestore
-            const adminRoleRef = doc(firestore, 'roles_admin', employeeIdToCheck);
-            const hrRoleRef = doc(firestore, 'roles_hr', employeeIdToCheck);
+            // For regular users, fetch their employee document to get permissions
+            const employeeDocRef = doc(firestore, 'employees', firebaseUser.uid);
             try {
-                const [adminSnap, hrSnap] = await Promise.all([
-                    getDoc(adminRoleRef).catch(e => {
-                        const contextualError = new FirestorePermissionError({ operation: 'get', path: adminRoleRef.path });
-                        errorEmitter.emit('permission-error', contextualError);
-                        throw e; // re-throw original error
-                    }),
-                    getDoc(hrRoleRef).catch(e => {
-                        const contextualError = new FirestorePermissionError({ operation: 'get', path: hrRoleRef.path });
-                        errorEmitter.emit('permission-error', contextualError);
-                        throw e; // re-throw original error
-                    })
-                ]);
-                const roles = {
-                    isAdmin: adminSnap.exists(),
-                    isHr: hrSnap.exists()
-                };
+                const employeeSnap = await getDoc(employeeDocRef).catch(e => {
+                    const contextualError = new FirestorePermissionError({ operation: 'get', path: employeeDocRef.path });
+                    errorEmitter.emit('permission-error', contextualError);
+                    throw e; // re-throw original error
+                });
                 
-                // An admin should also have HR privileges
-                if (roles.isAdmin) {
-                    roles.isHr = true;
+                let permissions: UserPermissions = { isAdmin: false, screens: [] };
+
+                if (employeeSnap.exists()) {
+                    const employeeData = employeeSnap.data() as Employee;
+                    permissions.screens = employeeData.permissions || [];
                 }
 
-                setUserAuthState({ user: firebaseUser, roles, isUserLoading: false, userError: null });
+                setUserAuthState({ user: firebaseUser, permissions, isUserLoading: false, userError: null });
             } catch (error) {
-                console.error("FirebaseProvider: Error fetching user roles:", error);
-                // Set default (non-privileged) roles on error
-                 setUserAuthState({ user: firebaseUser, roles: { isAdmin: false, isHr: false }, isUserLoading: false, userError: error as Error });
+                console.error("FirebaseProvider: Error fetching user permissions:", error);
+                // Set default (non-privileged) permissions on error
+                 setUserAuthState({ user: firebaseUser, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: error as Error });
             }
         } else {
-            setUserAuthState({ user: null, roles: { isAdmin: false, isHr: false }, isUserLoading: false, userError: null });
+            setUserAuthState({ user: null, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: null });
         }
       },
       (error) => { // Auth listener error
         console.error("FirebaseProvider: onAuthStateChanged error:", error);
-        setUserAuthState({ user: null, roles: { isAdmin: false, isHr: false }, isUserLoading: false, userError: error });
+        setUserAuthState({ user: null, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: error });
       }
     );
     return () => unsubscribe(); // Cleanup
@@ -177,7 +158,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     firestore: context.firestore,
     auth: context.auth,
     user: context.user,
-    roles: context.roles,
+    permissions: context.permissions,
     isUserLoading: context.isUserLoading,
     userError: context.userError,
   };
@@ -215,9 +196,9 @@ export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | 
 /**
  * Hook specifically for accessing the authenticated user's state.
  * This provides the User object, loading status, and any auth errors.
- * @returns {UserHookResult} Object with user, isUserLoading, userError.
+ * @returns {UserHookResult} Object with user, permissions, isUserLoading, userError.
  */
 export const useUser = (): UserHookResult => {
-  const { user, roles, isUserLoading, userError } = useFirebase();
-  return { user, roles, isUserLoading, userError };
+  const { user, permissions, isUserLoading, userError } = useFirebase();
+  return { user, permissions, isUserLoading, userError };
 };
