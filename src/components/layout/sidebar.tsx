@@ -12,6 +12,7 @@ import {
   Camera,
   LogOut,
   LucideIcon,
+  FileCheck2
 } from "lucide-react";
 import {
   Sidebar as SidebarContainer,
@@ -49,6 +50,7 @@ export const menuItems: MenuItem[] = [
     { href: "/employees", icon: Users, label: "الموظفين", roles: ['admin', 'hr'] },
     { href: "/attendance", icon: ScanLine, label: "سجل الحضور", roles: ['admin', 'hr'] },
     { href: "/payroll", icon: CreditCard, label: "الرواتب", roles: ['admin', 'hr'] },
+    { href: "/payroll/paid", icon: FileCheck2, label: "الرواتب المدفوعة", roles: ['admin', 'hr'] },
     { href: "/attendance/qr", icon: QrCode, label: "إنشاء QR Code", roles: ['admin', 'hr'] },
     { href: "/scan", icon: Camera, label: "مسح QR", roles: ['admin', 'hr', 'employee'] },
     { href: "/settings", icon: Settings, label: "الإعدادات", roles: ['admin'] },
@@ -68,11 +70,10 @@ export function Sidebar() {
     const accessibleMenuItems = menuItems.filter(item => {
         if (!user) return false;
         if (roles.isAdmin) return true;
-        if (!item.roles || item.roles.length === 0) return true;
-        const userRoles = new Set<string>();
-        if (roles.isHr) userRoles.add('hr');
-        userRoles.add('employee');
-        return item.roles.some(requiredRole => userRoles.has(requiredRole));
+        const userRolesSet = new Set<string>();
+        if (roles.isHr) userRolesSet.add('hr');
+        userRolesSet.add('employee'); // All authenticated users are at least employees
+        return item.roles.some(requiredRole => userRolesSet.has(requiredRole));
     });
 
   return (
@@ -118,7 +119,7 @@ export function Sidebar() {
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
                       {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt={userAvatar.description} />}
-                      <AvatarFallback>{isUserLoading ? '' : (user?.displayName?.charAt(0) || 'U')}</AvatarFallback>
+                      <AvatarFallback>{isUserLoading ? '' : (user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U')}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col items-start">
                        <span className="text-sm font-medium text-sidebar-foreground">{user.displayName || user.email?.split('@')[0]}</span>

@@ -18,13 +18,15 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy, limit, startAfter, endBefore, limitToLast, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import type { WorkDay, Employee } from '@/lib/types';
-import { Loader2, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import { findImage } from '@/lib/placeholder-images';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { DateRangePicker } from '@/components/shared/date-range-picker';
+import { DateRange } from 'react-day-picker';
+import { subDays } from 'date-fns';
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -41,39 +43,35 @@ const statusMap = {
   },
 };
 
-const PAGE_SIZE = 25;
-
 export default function AttendanceLogPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
-  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [page, setPage] = useState(1);
 
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 20),
+    to: new Date(),
+  });
 
   const canView = roles.isAdmin || roles.isHr;
 
   const workDaysQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !canView) return null;
-    if (page === 1) {
-        return query(
-          collection(firestore, 'workDays'),
-          orderBy('checkInTime', 'desc'),
-          limit(PAGE_SIZE)
-        );
-    }
-    // This is a placeholder for subsequent page queries, which will be handled by navigation buttons
+    if (!firestore || !user || !canView || !dateRange?.from) return null;
+    
+    const startTimestamp = Timestamp.fromDate(dateRange.from);
+    // To include the whole 'to' day, we set the time to the end of the day.
+    const endOfDay = new Date(dateRange.to || dateRange.from);
+    endOfDay.setHours(23, 59, 59, 999);
+    const endTimestamp = Timestamp.fromDate(endOfDay);
+
     return query(
       collection(firestore, 'workDays'),
       orderBy('checkInTime', 'desc'),
-      limit(PAGE_SIZE)
+      where('checkInTime', '>=', startTimestamp),
+      where('checkInTime', '<=', endTimestamp)
     );
-  }, [firestore, user, canView, page]);
+  }, [firestore, user, canView, dateRange]);
 
-
-  const [currentQuery, setCurrentQuery] = useState(workDaysQuery);
-
-  const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(currentQuery);
+  const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(workDaysQuery);
   
   const employeesQuery = useMemoFirebase(() => {
     if (!firestore || !user || !canView) return null;
@@ -94,42 +92,6 @@ export default function AttendanceLogPage() {
   }, [workDays, employees]);
 
   const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
-  
-   const handleNext = () => {
-    if (!firestore || !lastVisible) return;
-    const nextQuery = query(
-      collection(firestore, 'workDays'),
-      orderBy('checkInTime', 'desc'),
-      startAfter(lastVisible),
-      limit(PAGE_SIZE)
-    );
-    setCurrentQuery(nextQuery);
-    setPage(p => p + 1);
-  };
-
-  const handlePrevious = () => {
-    if (!firestore || !firstVisible) return;
-    const prevQuery = query(
-      collection(firestore, 'workDays'),
-      orderBy('checkInTime', 'desc'),
-      endBefore(firstVisible),
-      limitToLast(PAGE_SIZE)
-    );
-    setCurrentQuery(prevQuery);
-    setPage(p => p - 1);
-  };
-
-  useMemo(() => {
-    if (workDays && workDays.length > 0) {
-        // use the _snapshot property from our custom hook
-        setFirstVisible(workDays[0]._snapshot);
-        setLastVisible(workDays[workDays.length - 1]._snapshot);
-    } else {
-        setFirstVisible(null);
-        setLastVisible(null);
-    }
-  }, [workDays]);
-
 
   if (isLoading && combinedData.length === 0) {
     return (
@@ -153,20 +115,23 @@ export default function AttendanceLogPage() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>سجل الحضور والانصراف</CardTitle>
-        <CardDescription>
-          عرض سجلات الحضور والانصراف لجميع الموظفين.
-        </CardDescription>
+      <CardHeader className="flex-col md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>سجل الحضور والانصراف</CardTitle>
+            <CardDescription>
+              عرض وتصفية سجلات الحضور لجميع الموظفين.
+            </CardDescription>
+          </div>
+          <DateRangePicker dateRange={dateRange} onUpdate={setDateRange} />
       </CardHeader>
       <CardContent>
-        {isLoading && combinedData.length === 0 ? (
+        {isLoading ? (
           <div className="flex justify-center items-center h-48">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : combinedData.length === 0 && page === 1 ? (
+        ) : combinedData.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-             <p>لا توجد سجلات حضور حتى الآن.</p>
+             <p>لا توجد سجلات حضور في هذا النطاق الزمني.</p>
           </div>
         ) : (
           <>
@@ -271,17 +236,6 @@ export default function AttendanceLogPage() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
-             <div className="flex items-center justify-between mt-6">
-                <Button variant="outline" onClick={handlePrevious} disabled={page <= 1}>
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                    السابق
-                </Button>
-                <span className="text-sm text-muted-foreground">صفحة {page}</span>
-                <Button variant="outline" onClick={handleNext} disabled={!lastVisible || (!!workDays && workDays.length < PAGE_SIZE)}>
-                    التالي
-                    <ChevronLeft className="h-4 w-4 mr-2" />
-                </Button>
             </div>
           </>
         )}

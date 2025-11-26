@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ChevronRight, ChevronLeft, ArrowUpCircle, ArrowDownCircle, Banknote, FileDigit, Loader2, ShieldAlert } from "lucide-react";
+import { FileText, ArrowUpCircle, ArrowDownCircle, Banknote, FileDigit, Loader2, ShieldAlert } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -23,6 +23,9 @@ import type { Payroll, Employee } from '@/lib/types';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DateRangePicker } from "@/components/shared/date-range-picker";
+import { DateRange } from "react-day-picker";
+import { subDays, getYear, getMonth } from "date-fns";
 
 
 const statusMap = {
@@ -36,32 +39,30 @@ const formatCurrency = (amount: number) => {
   
 
 export default function PayrollPage() {
-  const [currentDate, setCurrentDate] = useState(new Date()); 
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date(),
+  });
 
   const canView = roles.isAdmin || roles.isHr;
 
-  const handleMonthChange = (direction: 'next' | 'prev') => {
-    setCurrentDate(prevDate => {
-        const newDate = new Date(prevDate);
-        const month = direction === 'next' ? newDate.getMonth() + 1 : newDate.getMonth() - 1;
-        newDate.setMonth(month);
-        return newDate;
-    });
-  };
-  
-  const selectedYear = currentDate.getFullYear();
-  const selectedMonth = currentDate.getMonth() + 1; // getMonth() is 0-indexed
+  const payrollsQuery = useMemoFirebase(()_=>{
+    if (!firestore || !canView || !dateRange?.from) return null;
+    
+    // We filter by month and year of the start date. This is a simplification.
+    // A more robust solution might involve querying a date field on the payroll document.
+    const fromDate = dateRange.from;
+    const year = getYear(fromDate);
+    const month = getMonth(fromDate) + 1; // getMonth is 0-indexed
 
-  const payrollsQuery = useMemoFirebase(() => {
-    if (!firestore || !canView) return null;
     return query(
       collection(firestore, 'payrolls'),
-      where('year', '==', selectedYear),
-      where('month', '==', selectedMonth)
+      where('year', '==', year),
+      where('month', '==', month)
     );
-  }, [firestore, canView, selectedYear, selectedMonth]);
+  }, [firestore, canView, dateRange]);
 
   const { data: payrolls, isLoading: isLoadingPayrolls } = useCollection<Payroll>(payrollsQuery);
 
@@ -95,8 +96,6 @@ export default function PayrollPage() {
     }, { baseSalary: 0, allowances: 0, deductions: 0, netSalary: 0 });
   }, [combinedData]);
 
-  const monthName = new Intl.DateTimeFormat('ar-EG', { month: 'long' }).format(currentDate);
-  const year = currentDate.getFullYear();
   
   const isLoading = isUserLoading || isLoadingPayrolls || isLoadingEmployees;
 
@@ -177,23 +176,15 @@ export default function PayrollPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle>تقرير الرواتب - {monthName} {year}</CardTitle>
-              <CardDescription>
-                ملخص الرواتب المحسوبة للشهر المحدد.
-              </CardDescription>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle>تقرير الرواتب</CardTitle>
+                <CardDescription>
+                  ملخص الرواتب المحسوبة للفترة المحددة.
+                </CardDescription>
+              </div>
+               <DateRangePicker dateRange={dateRange} onUpdate={setDateRange} />
             </div>
-            <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => handleMonthChange('next')}>
-                    <ChevronRight className="h-4 w-4" />
-                </Button>
-                <span className="w-24 text-center font-semibold">{monthName}</span>
-                <Button variant="outline" size="icon" onClick={() => handleMonthChange('prev')}>
-                    <ChevronLeft className="h-4 w-4" />
-                </Button>
-            </div>
-          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
