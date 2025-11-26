@@ -127,8 +127,8 @@ export default function DashboardPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>الموظف</TableHead>
-                    <TableHead>وقت الحضور</TableHead>
-                    <TableHead>وقت الانصراف</TableHead>
+                    <TableHead className="hidden sm:table-cell">وقت الحضور</TableHead>
+                    <TableHead className="hidden md:table-cell">وقت الانصراف</TableHead>
                     <TableHead>الحالة</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -148,8 +148,8 @@ export default function DashboardPage() {
                             <div className="font-medium">{record.employeeId}</div>
                          )}
                       </TableCell>
-                      <TableCell>{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</TableCell>
-                      <TableCell>{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</TableCell>
+                      <TableCell className="hidden md:table-cell">{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</TableCell>
                       <TableCell>
                         <Badge
                           variant='secondary'
