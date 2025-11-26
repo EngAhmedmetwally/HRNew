@@ -13,6 +13,7 @@ import { useDoc, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { addDoc, collection, doc, Timestamp } from "firebase/firestore";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
 
 
 export default function QrCodePage() {
@@ -23,6 +24,7 @@ export default function QrCodePage() {
   const [isLoading, setIsLoading] = useState(true);
   const timerRef = useRef<NodeJS.Timeout>();
   const isMountedRef = useRef(true);
+  const router = useRouter();
   
   const settingsDocRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -33,6 +35,12 @@ export default function QrCodePage() {
   const qrValiditySeconds = storedSettings?.settings?.qrRefreshRate || 10;
   
   const canView = roles.isAdmin || roles.isHr;
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
 
   const generateQrCode = useCallback(async () => {
     if (!firestore || !isMountedRef.current || !canView) return;
@@ -79,7 +87,7 @@ export default function QrCodePage() {
         timerRef.current = setTimeout(generateQrCode, qrValiditySeconds * 1000);
       }
     }
-  }, [firestore, canView, qrValiditySeconds]);
+  }, [firestore, canView, qrValiditySeconds, qrCodeUrl]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -107,7 +115,7 @@ export default function QrCodePage() {
     return () => clearInterval(countdownTimer);
   }, [isLoading, qrCodeUrl]);
 
-  if (isUserLoading || (canView && storedSettings === undefined)) {
+  if (isUserLoading || (canView && storedSettings === undefined) || !user) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />

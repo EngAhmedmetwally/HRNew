@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 
 export default function DatabaseManagementPage() {
@@ -33,7 +34,14 @@ export default function DatabaseManagementPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
   const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
   const canView = roles.isAdmin;
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
   
   const handleDeleteOldQrCodes = async () => {
     if (!firestore) return;
@@ -85,7 +93,7 @@ export default function DatabaseManagementPage() {
   };
 
 
-  if (isUserLoading) {
+  if (isUserLoading || !user) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />

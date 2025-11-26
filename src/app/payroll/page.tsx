@@ -18,14 +18,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { Payroll, Employee } from '@/lib/types';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DateRangePicker } from "@/components/shared/date-range-picker";
 import { DateRange } from "react-day-picker";
-import { subDays, getYear, getMonth } from "date-fns";
+import { getYear, getMonth } from "date-fns";
+import { useRouter } from "next/navigation";
 
 
 const statusMap = {
@@ -41,12 +42,19 @@ const formatCurrency = (amount: number) => {
 export default function PayrollPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const router = useRouter();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
 
   const canView = roles.isAdmin || roles.isHr;
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
 
   const payrollsQuery = useMemoFirebase(()=>{
     if (!firestore || !canView || !dateRange?.from) return null;
@@ -99,7 +107,7 @@ export default function PayrollPage() {
   
   const isLoading = isUserLoading || isLoadingPayrolls || isLoadingEmployees;
 
-  if (isUserLoading) {
+  if (isUserLoading || !user) {
      return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />

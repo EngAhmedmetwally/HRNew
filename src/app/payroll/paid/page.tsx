@@ -21,10 +21,11 @@ import { collection, query, where } from 'firebase/firestore';
 import type { Payroll, Employee } from '@/lib/types';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { DateRangePicker } from '@/components/shared/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { getYear, getMonth } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 const statusMap = {
   paid: { text: "مدفوع", className: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" },
@@ -38,12 +39,19 @@ const formatCurrency = (amount: number) => {
 export default function PaidPayrollPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const router = useRouter();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
 
   const canView = roles.isAdmin || roles.isHr;
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
 
   const payrollsQuery = useMemoFirebase(() => {
     if (!firestore || !canView || !dateRange?.from) return null;
@@ -85,7 +93,7 @@ export default function PaidPayrollPage() {
 
   const isLoading = isUserLoading || isLoadingPayrolls || isLoadingEmployees;
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />

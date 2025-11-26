@@ -24,6 +24,7 @@ import { useDoc, useFirebase, useMemoFirebase, useUser } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface DeductionLevel {
   id: string;
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const router = useRouter();
   const canView = roles.isAdmin;
 
   const settingsDocRef = useMemoFirebase(() => {
@@ -67,6 +69,12 @@ export default function SettingsPage() {
   const [deductionLevels, setDeductionLevels] = useState<DeductionLevel[]>(defaultSettingsData.deductionLevels);
   const [isSaving, setIsSaving] = useState(false);
   
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
+
   useEffect(() => {
     if (storedSettings) {
         setSettings(storedSettings.settings || defaultSettingsData.settings);
@@ -172,7 +180,7 @@ export default function SettingsPage() {
 
   const isLoading = isUserLoading || isLoadingSettings;
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -31,6 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { EmployeeForm } from "@/components/employees/employee-form";
+import { useRouter } from "next/navigation";
 
 
 const statusMap = {
@@ -44,6 +45,7 @@ export default function EmployeesPage() {
   const { user, roles, isUserLoading } = useUser();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
+  const router = useRouter();
 
   const handleOpenDialog = (employee?: Employee) => {
     setEditingEmployee(employee);
@@ -54,6 +56,12 @@ export default function EmployeesPage() {
     setIsDialogOpen(false);
     setEditingEmployee(undefined);
   };
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
   
   const canView = roles.isAdmin || roles.isHr;
 
@@ -66,7 +74,7 @@ export default function EmployeesPage() {
 
   const isLoading = isUserLoading || (canView && isLoadingEmployees);
 
-  if (isLoading && !employees) {
+  if (isLoading || !user) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -106,7 +114,7 @@ export default function EmployeesPage() {
           <CardHeader>
             <CardTitle>قائمة الموظفين</CardTitle>
             <CardDescription>
-              {isLoading ? 'جاري تحميل الموظفين...' : `تم العثور على ${employees?.length || 0} موظف.`}
+              {isLoading && !employees ? 'جاري تحميل الموظفين...' : `تم العثور على ${employees?.length || 0} موظف.`}
             </CardDescription>
           </CardHeader>
           <CardContent>

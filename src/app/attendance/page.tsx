@@ -16,16 +16,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import type { WorkDay, Employee } from '@/lib/types';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { DateRangePicker } from '@/components/shared/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { subDays } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -45,6 +45,7 @@ const statusMap = {
 export default function AttendanceLogPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const router = useRouter();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 20),
@@ -52,6 +53,12 @@ export default function AttendanceLogPage() {
   });
 
   const canView = roles.isAdmin || roles.isHr;
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
 
   const workDaysQuery = useMemoFirebase(() => {
     if (!firestore || !user || !canView || !dateRange?.from) return null;
@@ -92,7 +99,7 @@ export default function AttendanceLogPage() {
 
   const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
 
-  if (isLoading && combinedData.length === 0) {
+  if ((isLoading && combinedData.length === 0) || !user) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />

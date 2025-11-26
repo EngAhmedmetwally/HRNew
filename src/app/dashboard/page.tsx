@@ -24,7 +24,8 @@ import { collection, query, where, Timestamp, orderBy } from "firebase/firestore
 import type { WorkDay, Employee } from "@/lib/types";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
+import { useRouter } from "next/navigation";
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -135,8 +136,15 @@ function DailyAttendanceLog({ combinedData, isLoading }: { combinedData: Combine
 export default function DashboardPage() {
     const { firestore } = useFirebase();
     const { user, roles, isUserLoading } = useUser();
+    const router = useRouter();
 
     const canView = roles.isAdmin || roles.isHr;
+
+    useEffect(() => {
+        if (!isUserLoading && !user) {
+            router.replace('/login');
+        }
+    }, [isUserLoading, user, router]);
 
     const dailyWorkDaysQuery = useMemoFirebase(() => {
         if (!firestore || !user || !canView) return null;
@@ -173,7 +181,7 @@ export default function DashboardPage() {
 
     const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
 
-    if (isLoading) {
+    if (isLoading || !user) {
         return (
             <div className="flex justify-center items-center h-full">
                 <Loader2 className="h-16 w-16 animate-spin text-primary" />
