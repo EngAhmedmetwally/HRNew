@@ -62,20 +62,20 @@ export default function LoginPage() {
     const password = formData.get("password") as string;
 
     try {
+        // Special case for the super-admin
         if (employeeId === 'admin' && password === '123456') {
             const adminEmail = 'admin@hr-pulse.system';
             try {
-                // First try to sign in
                 await signInWithEmailAndPassword(auth, adminEmail, password);
             } catch (error: any) {
-                // If the admin user doesn't exist, create it. This is a secure fallback for the first-ever login.
                 if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
                     await createUserWithEmailAndPassword(auth, adminEmail, password);
                 } else {
-                    throw error; // Rethrow other auth errors
+                    throw error;
                 }
             }
         } else {
+            // Standard employee login using Firestore for credentials
             const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
             const querySnapshot = await getDocs(q);
 
@@ -86,36 +86,22 @@ export default function LoginPage() {
             const employeeDoc = querySnapshot.docs[0];
             const employeeData = employeeDoc.data() as Employee;
             
-            // Manual password check against the stored password in Firestore
             if (employeeData.password !== password) {
                 throw new Error("auth/wrong-password");
             }
-
-            // If password is correct, sign in anonymously to get a UID for session management.
-            // Firestore security rules will handle the actual permissions based on this UID.
-            // We need to sign out first in case there's an existing session.
-            if(auth.currentUser) {
+            
+            // If password matches, sign in user anonymously to get a session UID
+            // This is a crucial step for our security rules to work
+            if (auth.currentUser) {
               await auth.signOut();
             }
-            // By signing in with a *different* method (anonymous), we avoid conflicts with email/password auth
-            // but still get a valid, authenticated session for security rules.
             const userCredential = await signInAnonymously(auth);
-            
-            // This step is crucial: we update the employee document with the new anonymous UID.
-            // This links the anonymous session to the specific employee record for our security rules.
-            const employeeRef = doc(firestore, 'employees', employeeDoc.id);
-            await setDoc(employeeRef, { id: userCredential.user.uid }, { merge: true });
+            const anonymousUid = userCredential.user.uid;
 
-            // We must now sign out the old user and sign in the new one.
-            // This is a workaround to "swap" the UID associated with the employee record.
-            // In a real application, a more robust custom token system would be used.
-            // For now, this lets our security rules based on `request.auth.uid == resource.data.id` work.
-            // This is a complex flow, but it's necessary to bridge the gap between custom auth logic and Firebase's auth model.
-            // A simplified explanation:
-            // 1. We checked the password from our database.
-            // 2. We created a temporary anonymous user to get a session.
-            // 3. We told our database "this employee is now logged in with this temporary session".
-            // 4. Now we can proceed. The next `useUser` hook will see this new session and apply correct roles.
+            // Associate the new anonymous UID with the employee document
+            // This allows rules to check `request.auth.uid == resource.data.id`
+            const employeeRef = doc(firestore, 'employees', employeeDoc.id);
+            await setDoc(employeeRef, { id: anonymousUid }, { merge: true });
         }
 
         toast({
@@ -127,21 +113,18 @@ export default function LoginPage() {
 
     } catch (error: any) {
       console.error("Login Error:", error);
-      let description = "فشل تسجيل الدخول. يرجى التحقق من رقم الموظف وكلمة المرور.";
+      let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
       if (error.message === 'auth/user-not-found' || error.message === 'auth/wrong-password') {
-        description = "رقم الموظف أو كلمة المرور غير صحيحة.";
+        description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
       } else if (error.code === 'auth/invalid-credential') {
-        description = "بيانات الاعتماد غير صالحة. قد يكون هذا بسبب مشكلة في الإعداد الأولي للمدير.";
-      } else if (error.code === 'auth/invalid-email') {
-        description = "حساب المدير الخارق غير موجود. يرجى التأكد من تشغيل الإعداد الأولي.";
-      } else if (error.code === 'auth/api-key-not-valid') {
-        description = "مفتاح API الخاص بـ Firebase غير صالح. يرجى الاتصال بدعم النظام.";
+        description = "بيانات اعتماد المدير غير صالحة.";
       }
       toast({
         variant: "destructive",
         title: "فشل تسجيل الدخول",
         description: description,
       });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -178,12 +161,12 @@ export default function LoginPage() {
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
                     <CardDescription>
-                    أدخل رقم الموظف وكلمة المرور للوصول إلى حسابك
+                    أدخل اسم المستخدم وكلمة المرور للوصول إلى حسابك
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
-                    <Label htmlFor="employeeId">رقم الموظف</Label>
+                    <Label htmlFor="employeeId">اسم المستخدم</Label>
                     <Input id="employeeId" name="employeeId" type="text" placeholder="E001" required />
                     </div>
                     <div className="space-y-2">

@@ -103,7 +103,7 @@ service cloud.firestore {
       allow get: if isOwner(employeeId) || isHrOrAdmin();
       allow list: if isHrOrAdmin();
       allow create: if isHrOrAdmin();
-      allow update: if isHrOrAdmin() && !("id" in request.resource.data) && !("employeeId" in request.resource.data);
+      allow update: if isHrOrAdmin() && !("employeeId" in request.resource.data);
       allow delete: if isHrOrAdmin() && resource != null;
     }
 

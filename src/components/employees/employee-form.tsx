@@ -34,7 +34,7 @@ import { ScrollArea } from '../ui/scroll-area';
 // Unified schema for both create and edit
 const employeeFormSchema = z.object({
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
-  employeeId: z.string().min(1, { message: 'رقم الموظف مطلوب' }),
+  employeeId: z.string().min(1, { message: 'اسم المستخدم (رقم الموظف) مطلوب' }),
   password: z.string().optional(),
   jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
@@ -73,7 +73,7 @@ const defaultFormValues: EmployeeFormValues = {
 
 export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const { toast } = useToast();
-  const { auth, firestore } = useFirebase();
+  const { firestore } = useFirebase();
   const isEditMode = !!employee;
 
   const form = useForm<EmployeeFormValues>({
@@ -137,21 +137,20 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         const { role: newRole, ...employeeData } = data;
         
-        // Explicitly copy data for Firestore to avoid prototype issues
         const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
 
         if (!dataToUpdate.password) {
-            delete dataToUpdate.password; // Don't update password if it's empty
+            delete dataToUpdate.password;
         }
 
-        if (dataToUpdate.deviceId === undefined || dataToUpdate.deviceId === null || dataToUpdate.deviceId === '') {
+        if (dataToUpdate.deviceId === undefined) {
            delete dataToUpdate.deviceId;
         }
 
         try {
             await setDoc(employeeDocRef, dataToUpdate, { merge: true });
             
-            // Smarter Role Handling
+            // Smart Role Handling
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
 
@@ -183,7 +182,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-            form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
+            form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
             return;
         }
 
