@@ -139,7 +139,10 @@ service cloud.firestore {
     }
     
     match /settings/{docId} {
-      allow get, list, create, update, delete: if isAdmin();
+      // Allow HR and Admins to read settings for on-demand fetching in functions
+      allow get: if isHrOrAdmin();
+      // Only Admins can change settings
+      allow list, create, update, delete: if isAdmin();
     }
 
     /**

@@ -27,12 +27,6 @@ export default function ScanPage() {
   const { toast } = useToast();
   const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
-
-  const settingsDocRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return doc(firestore, 'settings', 'global');
-  }, [firestore]);
-  const { data: storedSettings } = useDoc(settingsDocRef);
   
   const employeeDocRef = useMemoFirebase(() => {
     if(!firestore || !user) return null;
@@ -87,10 +81,20 @@ export default function ScanPage() {
   };
   
   const recordAttendance = useCallback(async () => {
-      if (!firestore || !user || !storedSettings || !employee) {
+      if (!firestore || !user || !employee) {
         toast({ variant: 'destructive', title: 'خطأ', description: 'لم تكتمل البيانات المطلوبة لتسجيل الحضور.' });
         return;
       };
+
+      // Fetch settings on-demand inside the function
+      const settingsDocRef = doc(firestore, 'settings', 'global');
+      const settingsSnap = await getDoc(settingsDocRef);
+      if (!settingsSnap.exists()) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم العثور على إعدادات النظام.' });
+        return;
+      }
+      const storedSettings = settingsSnap.data();
+
 
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -156,7 +160,7 @@ export default function ScanPage() {
           toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
           setScanResult({ data: `عملية ناجحة`, message: successMessage });
       }
-  }, [firestore, user, storedSettings, employee]);
+  }, [firestore, user, employee]);
 
 
   const handleSuccessfulScan = useCallback(async (qrId: string, qrToken: string) => {
