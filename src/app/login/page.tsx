@@ -75,16 +75,28 @@ export default function LoginPage() {
     if (employeeIdInput === 'admin' && password === '123456') {
       try {
         const adminEmail = 'admin@hr-pulse.system';
-        // Try to sign in. If it fails with 'user-not-found', create the user.
+        // Try to sign in. If it fails with 'auth/invalid-credential', it could be a wrong password or a non-existent user.
+        // We'll try to create it in the catch block.
         try {
             await signInWithEmailAndPassword(auth, adminEmail, password);
         } catch (error: any) {
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                await createUserWithEmailAndPassword(auth, adminEmail, password);
-                // After creating, sign in again
-                await signInWithEmailAndPassword(auth, adminEmail, password);
+            if (error.code === 'auth/invalid-credential') {
+                try {
+                    // This will succeed if the user doesn't exist.
+                    await createUserWithEmailAndPassword(auth, adminEmail, password);
+                    // After creating, sign in again to establish the session.
+                    await signInWithEmailAndPassword(auth, adminEmail, password);
+                } catch (creationError: any) {
+                    // This will fail if the user *does* exist, which means the original error was a wrong password.
+                    if (creationError.code === 'auth/email-already-in-use') {
+                         toast({ variant: "destructive", title: "فشل دخول المدير", description: "كلمة مرور المدير غير صحيحة." });
+                    } else {
+                        // Another error occurred during creation
+                         throw creationError;
+                    }
+                }
             } else {
-                throw error; // Re-throw other sign-in errors
+                throw error; // Re-throw other unexpected sign-in errors
             }
         }
         toast({ title: "تم تسجيل الدخول كمدير للنظام" });
@@ -140,7 +152,7 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      if (error.code === 'auth/invalid-credential') {
         description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
       }
       toast({
