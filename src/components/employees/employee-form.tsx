@@ -28,7 +28,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { menuItems } from '@/components/layout/sidebar';
 
 const availablePermissions = menuItems
-  .map(item => ({ id: item.href.replace('/', ''), label: item.label }))
+  .map(item => ({ id: item.permissionKey, label: item.label }))
   .filter(p => p.id !== 'scan'); // 'scan' is for all employees
 
 // Zod schema for form validation
@@ -101,7 +101,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             ...defaultFormValues,
             ...employee,
             id: employee.id,
-            password: employee.password || '', // Show existing password for editing
+            password: '', // Don't pre-fill password for security
             permissions: employee.permissions || [],
             customCheckInTime: employee.customCheckInTime || '',
             customCheckOutTime: employee.customCheckOutTime || '',
@@ -124,9 +124,16 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     if (isEditMode && employee) {
         // Handle update
         const employeeDocRef = doc(firestore, 'employees', employee.id);
+        
+        const dataToUpdate = { ...data };
+        // If password is not changed, don't include it in the update
+        if (!data.password) {
+            delete (dataToUpdate as Partial<typeof dataToUpdate>).password;
+        }
+
         try {
-            await updateDoc(employeeDocRef, data).catch(e => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: data }));
+            await updateDoc(employeeDocRef, dataToUpdate).catch(e => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: dataToUpdate }));
                 throw e;
             });
             // Note: We don't update password in Auth here for simplicity.
@@ -225,7 +232,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                   <Input type="password" {...field} />
                   </FormControl>
                   <FormDescription>
-                    يجب أن تكون 6 أحرف على الأقل.
+                    {isEditMode ? 'اترك الحقل فارغًا لعدم تغيير كلمة المرور.' : 'يجب أن تكون 6 أحرف على الأقل.'}
                   </FormDescription>
                   <FormMessage />
               </FormItem>
