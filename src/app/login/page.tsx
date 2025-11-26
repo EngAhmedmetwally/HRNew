@@ -94,6 +94,8 @@ export default function LoginPage() {
                         // Another error occurred during creation
                          throw creationError;
                     }
+                    setIsLoading(false);
+                    return;
                 }
             } else {
                 throw error; // Re-throw other unexpected sign-in errors

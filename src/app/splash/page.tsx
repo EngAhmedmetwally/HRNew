@@ -9,7 +9,7 @@ import { FingerprintIcon } from '@/components/auth/fingerprint-icon';
 
 export default function SplashPage() {
   const router = useRouter();
-  const { user, roles, isUserLoading } = useUser();
+  const { user, isUserLoading } = useUser();
 
   useEffect(() => {
     if (!isUserLoading) {
@@ -17,9 +17,9 @@ export default function SplashPage() {
         // The redirection logic is now handled in the login page's useEffect
         // for better consistency and to handle device verification.
         // This splash page now primarily serves as a loading indicator.
-        // Let's assume the login page will handle the final redirection.
         // If the user lands here directly while logged in, the login page's
         // useEffect will trigger and redirect them.
+         router.replace('/login'); 
       } else {
         // If auth fails or user signs out, go back to login.
         router.replace('/login');
