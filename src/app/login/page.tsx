@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { signInAnonymously, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
@@ -79,7 +79,7 @@ export default function LoginPage() {
         try {
             await signInWithEmailAndPassword(auth, adminEmail, password);
         } catch (error: any) {
-            if (error.code === 'auth/user-not-found') {
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
                 await createUserWithEmailAndPassword(auth, adminEmail, password);
                 // After creating, sign in again
                 await signInWithEmailAndPassword(auth, adminEmail, password);
@@ -88,8 +88,8 @@ export default function LoginPage() {
             }
         }
         toast({ title: "تم تسجيل الدخول كمدير للنظام" });
-        // The useEffect will handle redirection.
         setIsLoading(false);
+        // The useEffect will handle redirection.
         return;
       } catch (error: any) {
         console.error("Admin login/creation failed:", error);
@@ -99,73 +99,55 @@ export default function LoginPage() {
       }
     }
 
-
     try {
-        const employeesRef = collection(firestore, 'employees');
-        const q = query(employeesRef, where("employeeId", "==", employeeIdInput));
+        // Instead of querying Firestore, we will now try to sign in directly
+        // with a constructed email address.
+        const email = `${employeeIdInput}@hr-pulse.system`;
 
-        const querySnapshot = await getDocs(q).catch(error => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: employeesRef.path,
-            operation: 'list',
-          }));
-          // It's crucial to re-throw the error to stop execution
-          throw error;
-        });
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // After successful login, get the employee data to check for device verification
+        const employeeDocRef = doc(firestore, 'employees', userCredential.user.uid);
+        const employeeSnap = await getDoc(employeeDocRef);
 
-        if (querySnapshot.empty) {
-            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
-            setIsLoading(false);
-            return;
+        if (!employeeSnap.exists()) {
+             throw new Error("Employee data not found after login.");
         }
+        
+        const employeeData = employeeSnap.data() as Employee;
+        const deviceFingerprint = getDeviceFingerprint();
 
-        const employeeDoc = querySnapshot.docs[0];
-        const employeeData = employeeDoc.data() as Employee;
-
-        // This is not secure. Passwords should be hashed. For demo purposes only.
-        if (employeeData.password !== password) {
-            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
-            setIsLoading(false);
-            return;
+        if (employeeData.deviceVerificationEnabled) {
+            if (!employeeData.deviceId) {
+                // First login, register device ID
+                await updateDoc(employeeDocRef, { deviceId: deviceFingerprint });
+            } else if (employeeData.deviceId !== deviceFingerprint) {
+                await auth.signOut(); // Sign out user
+                toast({ variant: "destructive", title: "فشل التحقق من الجهاز", description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب." });
+                setIsLoading(false);
+                return;
+            }
         }
-
-        // Sign in anonymously to get a Firebase user session
-        const { user: anonUser } = await signInAnonymously(auth);
-
-        // Associate the employee data with the anonymous user for this session
-        // This is a simplified custom auth flow. In a production app, you'd use custom tokens.
-        await updateProfile(anonUser, { displayName: employeeData.name });
-
-        // Manually "link" the employee ID for the role check in the provider
-        // This is a workaround to make the useUser hook work with this flow.
-        // We'll add the firestore doc ID to the user object temporarily.
-        (anonUser as any).firestoreDocId = employeeDoc.id;
-
 
         toast({
             title: "تم تسجيل الدخول بنجاح",
             description: "جاري توجيهك...",
         });
         
-        // The useUser hook will now re-evaluate and find the roles based on the firestoreDocId
-        // This forces a re-render and the useEffect will redirect.
-        // To be sure, we can manually trigger a router refresh.
+        // The useUser hook will now re-evaluate and find the roles based on the UID.
         router.refresh();
 
-
     } catch (error: any) {
-      if (!(error instanceof FirestorePermissionError)) {
-          console.error("Login Error:", error);
-          let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-            description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
-          }
-          toast({
-            variant: "destructive",
-            title: "فشل تسجيل الدخول",
-            description: description,
-          });
+      console.error("Login Error:", error);
+      let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
       }
+      toast({
+        variant: "destructive",
+        title: "فشل تسجيل الدخول",
+        description: description,
+      });
     } finally {
       setIsLoading(false);
     }

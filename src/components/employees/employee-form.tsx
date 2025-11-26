@@ -21,6 +21,7 @@ import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc, addDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import {
   Select,
   SelectContent,
@@ -135,22 +136,20 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        
-        const { role: newRole, ...employeeDataForUpdate } = data;
+        const { role: newRole, password, ...employeeDataForUpdate } = data;
         
         try {
-            await updateDoc(employeeDocRef, employeeDataForUpdate)
-                .catch(error => {
-                    errorEmitter.emit(
-                        'permission-error',
-                        new FirestorePermissionError({
-                            path: employeeDocRef.path,
-                            operation: 'update',
-                            requestResourceData: employeeDataForUpdate,
-                        })
-                    );
-                    throw error;
-                });
+            await updateDoc(employeeDocRef, employeeDataForUpdate);
+
+            // If there's a password, update it in Firebase Auth
+            if (password && auth.currentUser) {
+                // This is a complex operation and requires re-authentication.
+                // For this app, we will assume we need to find the user to update their password.
+                // This is not ideal, but a limitation of client-side password updates.
+                // A better approach would be an admin SDK on a backend.
+                // Since we can't do that, we will skip this for now. A user should use "Forgot Password".
+                toast({ title: 'تم تحديث بيانات الموظف', description: 'لتغيير كلمة المرور، يجب على المستخدم استخدام ميزة "نسيت كلمة المرور".' });
+            }
             
             // Handle roles update
             const batch = writeBatch(firestore);
@@ -166,79 +165,50 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 batch.set(hrRoleRef, { uid: employee.id });
             }
             
-            await batch.commit()
-                .catch(error => {
-                     errorEmitter.emit(
-                        'permission-error',
-                        new FirestorePermissionError({
-                            path: newRole === 'admin' ? adminRoleRef.path : hrRoleRef.path,
-                            operation: 'write', 
-                            requestResourceData: newRole !== 'employee' ? { uid: employee.id } : undefined,
-                        })
-                    );
-                    throw error;
-                });
+            await batch.commit();
             
-            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
+            if (!password) {
+              toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
+            }
             onFinish();
         } catch (error) {
             console.error('Update failed:', error);
-             if (!(error instanceof FirestorePermissionError)) {
-                toast({ variant: 'destructive', title: 'فشل التحديث', description: 'حدث خطأ أثناء تحديث بيانات الموظف.' });
-            }
+            toast({ variant: 'destructive', title: 'فشل التحديث', description: 'حدث خطأ أثناء تحديث بيانات الموظف.' });
         }
     } else {
-        // Create new employee logic
-        const employeesRef = collection(firestore, 'employees');
-        const q = query(employeesRef, where("employeeId", "==", data.employeeId));
+        // Create new employee
+        const { password, role, ...employeeData } = data;
+        if (!password) {
+            form.setError('password', { message: 'كلمة المرور مطلوبة للموظف الجديد.'});
+            return;
+        }
+
+        const email = `${data.employeeId}@hr-pulse.system`;
         
         try {
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
-                return;
-            }
+            // Step 1: Create user in Firebase Auth
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const newUserId = userCredential.user.uid;
 
-            // Prepare Firestore document
-            const { role, id, ...employeeData } = data;
+            // Step 2: Create employee document in Firestore with the same UID
+            const employeeDocRef = doc(firestore, 'employees', newUserId);
+            await setDoc(employeeDocRef, employeeData);
             
-            // Add the new employee document to Firestore
-            const docRef = await addDoc(employeesRef, employeeData).catch(error => {
-                errorEmitter.emit(
-                    'permission-error',
-                    new FirestorePermissionError({
-                        path: employeesRef.path,
-                        operation: 'create',
-                        requestResourceData: employeeData, 
-                    })
-                );
-                throw error;
-            });
-            
-            // Set roles if applicable
+            // Step 3: Set roles if applicable
             if (role === 'admin' || role === 'hr') {
-                const roleRef = doc(firestore, `roles_${role}`, docRef.id);
-                await setDoc(roleRef, { uid: docRef.id })
-                    .catch(error => {
-                         errorEmitter.emit(
-                            'permission-error',
-                            new FirestorePermissionError({
-                                path: roleRef.path,
-                                operation: 'create',
-                                requestResourceData: { uid: docRef.id },
-                            })
-                        );
-                        throw error;
-                    });
+                const roleRef = doc(firestore, `roles_${role}`, newUserId);
+                await setDoc(roleRef, { uid: newUserId });
             }
             
             toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
             onFinish();
 
         } catch (error: any) {
-             if (!(error instanceof FirestorePermissionError)) {
-                 console.error("Create employee failed:", error);
-                 toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
+             console.error("Create employee failed:", error);
+             if (error.code === 'auth/email-already-in-use') {
+                form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
+             } else {
+                toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
              }
         }
     }
