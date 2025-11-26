@@ -96,23 +96,7 @@ export default function NewEmployeePage() {
       };
 
       const employeeDocRef = doc(firestore, 'employees', user.uid);
-      setDoc(employeeDocRef, employeeDoc)
-        .catch(error => {
-          const contextualError = new FirestorePermissionError({
-            path: employeeDocRef.path,
-            operation: 'create',
-            requestResourceData: employeeDoc
-          });
-          errorEmitter.emit('permission-error', contextualError);
-        });
-
-      if (role === 'hr') {
-        const hrRoleRef = doc(firestore, 'roles_hr', user.uid);
-        await setDoc(hrRoleRef, { uid: user.uid });
-      } else if (role === 'admin') {
-        const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
-        await setDoc(adminRoleRef, { uid: user.uid });
-      }
+      await setDoc(employeeDocRef, employeeDoc);
 
       toast({
         title: 'تمت إضافة الموظف بنجاح',
@@ -123,13 +107,12 @@ export default function NewEmployeePage() {
       let description = "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.";
       if (error.code === 'auth/email-already-in-use') {
         description = "رقم الموظف هذا مستخدم بالفعل.";
-      } else if (error.name !== 'FirebaseError') { // Don't show generic toast for our custom handled errors
-         toast({
-            variant: 'destructive',
-            title: 'فشل إنشاء الموظف',
-            description: description,
-          });
       }
+      toast({
+          variant: 'destructive',
+          title: 'فشل إنشاء الموظف',
+          description: description,
+        });
     }
   }
 
@@ -323,8 +306,8 @@ export default function NewEmployeePage() {
                     name="role"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>الصلاحية</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormLabel>الصلاحية الأولية</FormLabel>
+                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                             <SelectTrigger>
                             <SelectValue placeholder="اختر صلاحية للموظف" />
@@ -336,6 +319,9 @@ export default function NewEmployeePage() {
                             <SelectItem value="admin">مدير نظام</SelectItem>
                         </SelectContent>
                         </Select>
+                        <FormDescription>
+                           يمكن تعديل الصلاحيات لاحقًا من شاشة تعديل الموظف.
+                        </FormDescription>
                         <FormMessage />
                     </FormItem>
                     )}
