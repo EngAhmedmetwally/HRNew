@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
@@ -107,44 +107,29 @@ export default function LoginPage() {
       return;
     }
 
-    // --- Custom Database Authentication for regular employees ---
+    // --- Standard Firebase Auth for regular employees ---
     try {
-        const employeesRef = collection(firestore, 'employees');
-        const q = query(employeesRef, where("employeeId", "==", employeeIdInput));
-        
-        const querySnapshot = await getDocs(q).catch(error => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: employeesRef.path,
-            operation: 'list',
-          }));
-          throw error;
-        });
+        const email = `${employeeIdInput}@hr-pulse.system`;
 
-        if (querySnapshot.empty) {
-            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
-            setIsLoading(false);
-            return;
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // After successful login, get the employee data to check for device verification
+        const employeeDocRef = doc(firestore, 'employees', userCredential.user.uid);
+        const employeeDoc = await getDoc(employeeDocRef);
+
+        if (!employeeDoc.exists()) {
+             await auth.signOut();
+             toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "لم يتم العثور على ملف الموظف المرتبط بهذا الحساب." });
+             setIsLoading(false);
+             return;
         }
 
-        const employeeDoc = querySnapshot.docs[0];
         const employeeData = employeeDoc.data() as Employee;
-        
-        if (employeeData.password !== password) {
-            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
-            setIsLoading(false);
-            return;
-        }
-
-        // At this point, credentials are correct. "Sign in" the user by
-        // associating their session with their employee document.
-        const userCredential = await signInWithEmailAndPassword(auth, `${employeeIdInput}@hr-pulse.system`, password);
-
-        // Perform device verification
         const deviceFingerprint = getDeviceFingerprint();
         if (employeeData.deviceVerificationEnabled) {
             if (!employeeData.deviceId) {
                 // First login, register device ID
-                await updateDoc(employeeDoc.ref, { deviceId: deviceFingerprint });
+                await updateDoc(employeeDocRef, { deviceId: deviceFingerprint });
             } else if (employeeData.deviceId !== deviceFingerprint) {
                 await auth.signOut(); // Sign out user
                 toast({ variant: "destructive", title: "فشل التحقق من الجهاز", description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب." });
@@ -242,3 +227,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    

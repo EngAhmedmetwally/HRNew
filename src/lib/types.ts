@@ -15,7 +15,6 @@ export interface Employee {
   baseSalary: number;
   deviceVerificationEnabled?: boolean;
   deviceId?: string;
-  password?: string; // For storing password in Firestore
   permissions: string[]; // List of accessible screen keys (e.g., 'dashboard', 'employees')
 }
 
@@ -48,3 +47,5 @@ export interface WorkDay {
     delayMinutes: number;
     overtimeHours: number;
 }
+
+    
