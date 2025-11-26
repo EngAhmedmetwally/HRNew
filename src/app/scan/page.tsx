@@ -16,6 +16,7 @@ import jsQR from 'jsqr';
 import { useFirebase, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, getDoc, serverTimestamp, setDoc, getDocs, collection, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 
 export default function ScanPage() {
@@ -27,12 +28,19 @@ export default function ScanPage() {
   const { toast } = useToast();
   const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
+  const router = useRouter();
   
   const employeeDocRef = useMemoFirebase(() => {
     if(!firestore || !user) return null;
     return doc(firestore, 'employees', user.uid);
   }, [firestore, user]);
   const { data: employee } = useDoc<Employee>(employeeDocRef);
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.replace('/login');
+    }
+  }, [isUserLoading, user, router]);
 
 
   useEffect(() => {
@@ -81,10 +89,15 @@ export default function ScanPage() {
   };
   
   const recordAttendance = useCallback(async () => {
-      if (!firestore || !user || !employee) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم تكتمل البيانات المطلوبة لتسجيل الحضور.' });
+      if (!firestore || !user) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم العثور على جلسة مستخدم صالحة.' });
         return;
       };
+
+      if (!employee) {
+          toast({ variant: 'destructive', title: 'جاري تحميل البيانات', description: 'لم تكتمل بيانات الموظف بعد، يرجى المحاولة مرة أخرى بعد لحظات.' });
+          return;
+      }
 
       // Fetch settings on-demand inside the function
       const settingsDocRef = doc(firestore, 'settings', 'global');
@@ -164,7 +177,7 @@ export default function ScanPage() {
 
 
   const handleSuccessfulScan = useCallback(async (qrId: string, qrToken: string) => {
-    if (!firestore || !user || !employee) {
+    if (!firestore || !user) {
         toast({ variant: 'destructive', title: 'خطأ', description: 'بيانات المستخدم غير مكتملة.' });
         return;
     }
@@ -189,7 +202,7 @@ export default function ScanPage() {
     // 2. Logic to record attendance
     await recordAttendance();
     
-  }, [firestore, user, employee, recordAttendance, toast]);
+  }, [firestore, user, recordAttendance, toast]);
   
   useEffect(() => {
     let animationFrameId: number;
