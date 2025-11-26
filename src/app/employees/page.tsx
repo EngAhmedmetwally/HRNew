@@ -66,9 +66,9 @@ export default function EmployeesPage() {
   const canView = roles.isAdmin || roles.isHr;
 
   const employeesQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !canView) return null;
+    if (!firestore || !canView) return null;
     return collection(firestore, 'employees');
-  }, [firestore, user, canView]);
+  }, [firestore, canView]);
   
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 

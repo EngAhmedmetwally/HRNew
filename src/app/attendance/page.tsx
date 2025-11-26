@@ -80,9 +80,9 @@ export default function AttendanceLogPage() {
   const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(workDaysQuery);
   
   const employeesQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !canView) return null;
+    if (!firestore || !canView) return null;
     return collection(firestore, 'employees');
-  }, [firestore, user, canView]);
+  }, [firestore, canView]);
 
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
