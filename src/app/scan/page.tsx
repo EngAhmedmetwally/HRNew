@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Camera, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { doc, getDoc, serverTimestamp, setDoc, getDocs, collection, query, where, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
@@ -76,127 +76,116 @@ export default function ScanPage() {
     };
   }, [toast, user]);
   
-  const recordAttendance = useCallback(async () => {
+  const recordAttendance = useCallback(async (): Promise<string> => {
     if (!firestore || !user) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم العثور على جلسة مستخدم صالحة.' });
-        return;
+        throw new Error('لم يتم العثور على جلسة مستخدم صالحة.');
     };
 
-    try {
-        const employeeDocRef = doc(firestore, 'employees', user.uid);
-        const [employeeSnap, settingsSnap] = await Promise.all([
-            getDoc(employeeDocRef).catch(e => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'get' }));
-                throw e; // re-throw to be caught by outer catch
-            }),
-            getDoc(doc(firestore, 'settings', 'global')).catch(e => {
-                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'settings/global', operation: 'get' }));
-                 throw e;
-            })
-        ]);
-        
-        if (!employeeSnap.exists()) {
-            toast({ variant: 'destructive', title: 'خطأ في البيانات', description: 'لم يتم العثور على بيانات الموظف. يرجى المحاولة مرة أخرى.' });
-            return;
-        }
-        const employee = employeeSnap.data() as Employee;
-        
-        if (!settingsSnap.exists()) {
-            toast({ variant: 'destructive', title: 'خطأ في الإعدادات', description: 'لم يتم العثور على إعدادات النظام.' });
-            return;
-        }
-        const storedSettings = settingsSnap.data();
-
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        const workDaysQuery = query(
-            collection(firestore, 'workDays'),
-            where('employeeId', '==', user.uid),
-            where('date', '>=', Timestamp.fromDate(today))
-        );
-
-        const querySnapshot = await getDocs(workDaysQuery);
-        const todayRecord = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
-
-        if (todayRecord && todayRecord.data().checkOutTime) {
-            const message = 'لقد قمت بتسجيل الحضور والانصراف لهذا اليوم بالفعل.';
-            setScanResult({data: 'فشل التسجيل', message});
-            toast({ variant: 'destructive', title: 'مسجل بالفعل', description: message });
-            return;
-        }
-        
-        if (todayRecord) { // Record exists, so this is a check-out
-            const checkInTime = (todayRecord.data().checkInTime as Timestamp).toDate();
-            const checkOutTime = now;
-            const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-
-            const updateData = {
-                checkOutTime: Timestamp.fromDate(checkOutTime),
-                totalWorkHours: workHours
-            };
-
-            await updateDoc(todayRecord.ref, updateData).catch(e => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: todayRecord.ref.path, operation: 'update', requestResourceData: updateData }));
-                throw e;
-            });
-            
-            const successMessage = `تم تسجيل انصرافك بنجاح في ${now.toLocaleDateString('ar-EG')} الساعة ${now.toLocaleTimeString('ar-EG')}.`;
-            setScanResult({ data: `عملية ناجحة`, message: successMessage });
-            toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
-
-        } else { // No record, so this is a check-in
-            const isPartTimeWithCustomTime = employee.contractType === 'part-time' && employee.customCheckInTime;
-            const checkInTimeSetting = isPartTimeWithCustomTime ? employee.customCheckInTime! : storedSettings.settings.checkInTime;
-            
-            const { gracePeriod } = storedSettings.settings;
-            const [hours, minutes] = checkInTimeSetting.split(':').map(Number);
-            
-            const checkInDeadline = new Date(now);
-            checkInDeadline.setHours(hours, minutes + (gracePeriod || 0), 0, 0);
-
-            let delayMinutes = 0;
-            if (now > checkInDeadline) {
-                delayMinutes = Math.floor((now.getTime() - checkInDeadline.getTime()) / (1000 * 60));
-            }
-
-            const workDayData = {
-                date: Timestamp.fromDate(now),
-                employeeId: user.uid,
-                checkInTime: Timestamp.fromDate(now),
-                checkOutTime: null,
-                totalWorkHours: 0,
-                delayMinutes: delayMinutes,
-                overtimeHours: 0
-            };
-            
-            const newWorkDayRef = doc(collection(firestore, 'workDays'));
-            await setDoc(newWorkDayRef, workDayData).catch(e => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: newWorkDayRef.path, operation: 'create', requestResourceData: workDayData }));
-                throw e;
-            });
-
-            const successMessage = `تم تسجيل حضورك بنجاح. دقائق التأخير: ${delayMinutes}`;
-            setScanResult({ data: `عملية ناجحة`, message: successMessage });
-            toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
-        }
-    } catch(error) {
-        // Errors are now emitted as contextual errors, so we just need to prevent the app from crashing.
-        // The FirebaseErrorListener will throw the error to the Next.js overlay.
-        console.error("An error occurred during attendance recording:", error);
+    const employeeDocRef = doc(firestore, 'employees', user.uid);
+    const settingsDocRef = doc(firestore, 'settings', 'global');
+    
+    const [employeeSnap, settingsSnap] = await Promise.all([
+        getDoc(employeeDocRef).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'get' }));
+            throw e;
+        }),
+        getDoc(settingsDocRef).catch(e => {
+             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: settingsDocRef.path, operation: 'get' }));
+             throw e;
+        })
+    ]);
+    
+    if (!employeeSnap.exists()) {
+        throw new Error('لم يتم العثور على بيانات الموظف. يرجى المحاولة مرة أخرى.');
     }
-  }, [firestore, user, toast]);
+    if (!settingsSnap.exists()) {
+        throw new Error('لم يتم العثور على إعدادات النظام.');
+    }
+    const employee = employeeSnap.data() as Employee;
+    const storedSettings = settingsSnap.data();
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const workDaysQuery = query(
+        collection(firestore, 'workDays'),
+        where('employeeId', '==', user.uid),
+        where('date', '>=', Timestamp.fromDate(today))
+    );
+
+    const querySnapshot = await getDocs(workDaysQuery);
+    const todayRecord = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
+
+    if (todayRecord && todayRecord.data().checkOutTime) {
+        throw new Error('لقد قمت بتسجيل الحضور والانصراف لهذا اليوم بالفعل.');
+    }
+    
+    if (todayRecord) { // Record exists, so this is a check-out
+        const checkInTime = (todayRecord.data().checkInTime as Timestamp).toDate();
+        const checkOutTime = now;
+        const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+
+        const updateData = {
+            checkOutTime: Timestamp.fromDate(checkOutTime),
+            totalWorkHours: workHours
+        };
+
+        await updateDoc(todayRecord.ref, updateData).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: todayRecord.ref.path, operation: 'update', requestResourceData: updateData }));
+            throw e;
+        });
+        
+        return `تم تسجيل انصرافك بنجاح في ${now.toLocaleDateString('ar-EG')} الساعة ${now.toLocaleTimeString('ar-EG')}.`;
+    } else { // No record, so this is a check-in
+        const isPartTimeWithCustomTime = employee.contractType === 'part-time' && employee.customCheckInTime;
+        const checkInTimeSetting = isPartTimeWithCustomTime ? employee.customCheckInTime! : storedSettings.settings.checkInTime;
+        
+        const { gracePeriod } = storedSettings.settings;
+        const [hours, minutes] = checkInTimeSetting.split(':').map(Number);
+        
+        const checkInDeadline = new Date(now);
+        checkInDeadline.setHours(hours, minutes + (gracePeriod || 0), 0, 0);
+
+        let delayMinutes = 0;
+        if (now > checkInDeadline) {
+            delayMinutes = Math.floor((now.getTime() - checkInDeadline.getTime()) / (1000 * 60));
+        }
+
+        const workDayData = {
+            date: Timestamp.fromDate(now),
+            employeeId: user.uid,
+            checkInTime: Timestamp.fromDate(now),
+            checkOutTime: null,
+            totalWorkHours: 0,
+            delayMinutes: delayMinutes,
+            overtimeHours: 0
+        };
+        
+        const newWorkDayRef = doc(collection(firestore, 'workDays'));
+        await setDoc(newWorkDayRef, workDayData).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: newWorkDayRef.path, operation: 'create', requestResourceData: workDayData }));
+            throw e;
+        });
+
+        return `تم تسجيل حضورك بنجاح. وقت الحضور: ${now.toLocaleTimeString('ar-EG')}. دقائق التأخير: ${delayMinutes}`;
+    }
+  }, [firestore, user]);
 
 
   const handleSuccessfulScan = useCallback(async (qrId: string, qrToken: string) => {
     if (!firestore || !user) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'بيانات المستخدم غير مكتملة.' });
+        const errorMsg = 'بيانات المستخدم غير مكتملة.';
+        setScanResult({data: 'فشل التحقق', message: errorMsg});
+        toast({ variant: 'destructive', title: 'خطأ', description: errorMsg });
         return;
     }
 
     try {
         const qrDocRef = doc(firestore, "qrCodes", qrId);
-        const qrDocSnap = await getDoc(qrDocRef);
+        const qrDocSnap = await getDoc(qrDocRef).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: qrDocRef.path, operation: 'get' }));
+            throw e;
+        });
 
         if (!qrDocSnap.exists() || qrDocSnap.data().token !== qrToken) {
             setScanResult({data: 'فشل التحقق', message: 'الكود المستخدم غير صالح أو مزور.'});
@@ -206,19 +195,23 @@ export default function ScanPage() {
         const qrData = qrDocSnap.data();
         const now = Timestamp.now();
         
-        if (now > qrData.validUntil) {
+        if (now.toMillis() > qrData.validUntil.toMillis()) {
             setScanResult({data: 'فشل التحقق', message: 'الكود المستخدم منتهي الصلاحية.'});
             return;
         }
         
-        await recordAttendance();
+        const successMessage = await recordAttendance();
+        setScanResult({ data: `عملية ناجحة`, message: successMessage });
+        toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
+
     } catch(error: any) {
+        const errorMessage = error.message || 'حدث خطأ غير متوقع أثناء معالجة الكود.';
+        setScanResult({data: 'فشل', message: errorMessage });
+        toast({ variant: 'destructive', title: 'فشل تسجيل الحضور', description: errorMessage });
         // This will catch permission errors from the getDoc call on qrCodes
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `qrCodes/${qrId}`,
-            operation: 'get',
-        }));
-        console.error("An error occurred during QR scan handling:", error);
+        if (!(error instanceof FirestorePermissionError)) {
+             console.error("An error occurred during QR scan handling:", error);
+        }
     }
     
   }, [firestore, user, recordAttendance, toast]);
