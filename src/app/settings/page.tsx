@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Save, PlusCircle, Trash2, LocateFixed, Loader2, ShieldAlert } from 'lucide-react';
+import { Save, PlusCircle, Trash2, LocateFixed, Loader2, ShieldAlert, Database } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -23,6 +23,7 @@ import {
 import { useDoc, useFirebase, useMemoFirebase, useUser } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 interface DeductionLevel {
   id: string;
@@ -202,6 +203,23 @@ export default function SettingsPage() {
 
       <form onSubmit={handleSubmit}>
         <div className="flex flex-col gap-8">
+           <Card>
+            <CardHeader>
+              <CardTitle>إدارة النظام</CardTitle>
+              <CardDescription>
+                عمليات متقدمة لإدارة وصيانة قاعدة البيانات.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+               <Button asChild>
+                  <Link href="/settings/database">
+                    <Database className="ml-2 h-4 w-4" />
+                    الانتقال لإدارة البيانات
+                  </Link>
+               </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>إعدادات الحضور العامة</CardTitle>
