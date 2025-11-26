@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useFirebase, useUser } from "@/firebase";
+import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
@@ -81,7 +81,10 @@ export default function LoginPage() {
 
         // Fetch employee data to check for device verification
         const employeeDocRef = doc(firestore, 'employees', loggedInUser.uid);
-        const employeeDocSnap = await getDoc(employeeDocRef);
+        const employeeDocSnap = await getDoc(employeeDocRef).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'get' }));
+            throw e;
+        });
 
         if (!employeeDocSnap.exists()) {
              throw new Error("لم يتم العثور على بيانات الموظف.");
@@ -107,7 +110,11 @@ export default function LoginPage() {
                 }
             } else {
                 // First time login after enabling verification, register this device
-                await updateDoc(employeeDocRef, { deviceId: currentDeviceFingerprint });
+                const deviceData = { deviceId: currentDeviceFingerprint };
+                await updateDoc(employeeDocRef, deviceData).catch(e => {
+                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: deviceData }));
+                    throw e;
+                });
                 toast({
                     title: "تم تسجيل الجهاز",
                     description: "تم ربط هذا الجهاز بحسابك بنجاح.",
@@ -124,17 +131,20 @@ export default function LoginPage() {
 
     } catch (error: any) {
       console.error("Login Error:", error);
-      let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
-      } else if (error.message) {
-        description = error.message;
+      // Avoid showing a generic toast if it's a permission error, as the listener will handle it.
+      if (error.name !== 'FirebaseError') {
+          let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
+          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
+          } else if (error.message) {
+            description = error.message;
+          }
+          toast({
+            variant: "destructive",
+            title: "فشل تسجيل الدخول",
+            description: description,
+          });
       }
-      toast({
-        variant: "destructive",
-        title: "فشل تسجيل الدخول",
-        description: description,
-      });
     } finally {
       setIsLoading(false);
     }
