@@ -21,14 +21,6 @@ import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc, addDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updatePassword } from 'firebase/auth';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { Employee } from '@/lib/types';
 import { ScrollArea } from '../ui/scroll-area';
 
@@ -37,7 +29,7 @@ const employeeFormSchema = z.object({
   id: z.string().optional(), // Keep ID for updates
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'اسم المستخدم (رقم الموظف) مطلوب' }),
-  password: z.string().optional(),
+  password: z.string().min(6, { message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
   customCheckInTime: z.string().optional(),
   customCheckOutTime: z.string().optional(),
@@ -47,7 +39,16 @@ const employeeFormSchema = z.object({
   role: z.enum(['employee', 'hr', 'admin'], { required_error: 'الصلاحية مطلوبة' }),
   deviceVerificationEnabled: z.boolean().default(false),
   deviceId: z.string().optional(),
+}).refine(data => {
+    // In edit mode, password can be empty
+    if (data.id && !data.password) return true;
+    // Otherwise, it must be at least 6 chars
+    return data.password.length >= 6;
+}, {
+    message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+    path: ["password"],
 });
+
 
 type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
 
@@ -77,16 +78,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const isEditMode = !!employee;
 
   const form = useForm<EmployeeFormValues>({
-    resolver: zodResolver(employeeFormSchema.refine(data => {
-        // For new employees, password is required
-        if (!isEditMode && (!data.password || data.password.length < 6)) return false;
-        // For existing, if password exists, it must be >= 6 chars
-        if (isEditMode && data.password && data.password.length > 0 && data.password.length < 6) return false;
-        return true;
-    }, { 
-        message: "كلمة المرور مطلوبة (6 أحرف على الأقل)", 
-        path: ["password"]
-    })),
+    resolver: zodResolver(employeeFormSchema),
     defaultValues: defaultFormValues,
   });
   
@@ -111,7 +103,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 ...defaultFormValues,
                 ...employee,
                 id: employee.id, // Explicitly set ID for edit mode
-                password: '', // Always clear password field for edit mode security
+                password: employee.password || '', // Set password from DB
                 role: role as 'employee' | 'hr' | 'admin',
                 customCheckInTime: employee.customCheckInTime || '',
                 customCheckOutTime: employee.customCheckOutTime || '',
@@ -128,28 +120,34 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (!firestore || !auth) {
+    if (!firestore) {
         toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
         return;
     }
 
+    // Check for duplicate employeeId on create
+    if (!isEditMode) {
+        const q = query(collection(firestore, 'employees'), where('employeeId', '==', data.employeeId));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
+            return;
+        }
+    }
+
+
     if (isEditMode && employee) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
-        const { role: newRole, password, ...employeeDataForUpdate } = data;
+        const { role: newRole, ...employeeDataForUpdate } = data;
         
         try {
-            await updateDoc(employeeDocRef, employeeDataForUpdate);
-
-            // If there's a password, update it in Firebase Auth
-            if (password && auth.currentUser) {
-                // This is a complex operation and requires re-authentication.
-                // For this app, we will assume we need to find the user to update their password.
-                // This is not ideal, but a limitation of client-side password updates.
-                // A better approach would be an admin SDK on a backend.
-                // Since we can't do that, we will skip this for now. A user should use "Forgot Password".
-                toast({ title: 'تم تحديث بيانات الموظف', description: 'لتغيير كلمة المرور، يجب على المستخدم استخدام ميزة "نسيت كلمة المرور".' });
+            // If password field is empty, don't update it.
+            if (!employeeDataForUpdate.password) {
+                delete (employeeDataForUpdate as Partial<EmployeeFormValues>).password;
             }
+
+            await updateDoc(employeeDocRef, employeeDataForUpdate);
             
             // Handle roles update
             const batch = writeBatch(firestore);
@@ -167,9 +165,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             
             await batch.commit();
             
-            if (!password) {
-              toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
-            }
+            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
             console.error('Update failed:', error);
@@ -177,39 +173,18 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         }
     } else {
         // Create new employee
-        const { password, role, ...employeeData } = data;
-        if (!password) {
-            form.setError('password', { message: 'كلمة المرور مطلوبة للموظف الجديد.'});
-            return;
-        }
-
-        const email = `${data.employeeId}@hr-pulse.system`;
+        const { id, role, ...employeeData } = data;
         
         try {
-            // Step 1: Create user in Firebase Auth
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const newUserId = userCredential.user.uid;
-
-            // Step 2: Create employee document in Firestore with the same UID
-            const employeeDocRef = doc(firestore, 'employees', newUserId);
-            await setDoc(employeeDocRef, employeeData);
-            
-            // Step 3: Set roles if applicable
-            if (role === 'admin' || role === 'hr') {
-                const roleRef = doc(firestore, `roles_${role}`, newUserId);
-                await setDoc(roleRef, { uid: newUserId });
-            }
+            // Just create the employee document in Firestore. No Auth user needed.
+            await addDoc(collection(firestore, 'employees'), employeeData);
             
             toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
             onFinish();
 
         } catch (error: any) {
              console.error("Create employee failed:", error);
-             if (error.code === 'auth/email-already-in-use') {
-                form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
-             } else {
-                toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
-             }
+             toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
         }
     }
   }
@@ -405,28 +380,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                   </FormItem>
               )}
               />
-          <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-              <FormItem>
-                  <FormLabel>الصلاحية</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                      <SelectTrigger>
-                      <SelectValue placeholder="اختر صلاحية للموظف" />
-                      </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                      <SelectItem value="employee">موظف</SelectItem>
-                      <SelectItem value="hr">مسؤول موارد بشرية</SelectItem>
-                      <SelectItem value="admin">مدير نظام</SelectItem>
-                  </SelectContent>
-                  </Select>
-                  <FormMessage />
-              </FormItem>
-              )}
-          />
+        
           <FormField
           control={form.control}
           name="deviceVerificationEnabled"

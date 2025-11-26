@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously, updateProfile } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
@@ -75,66 +75,85 @@ export default function LoginPage() {
     if (employeeIdInput === 'admin' && password === '123456') {
       try {
         const adminEmail = 'admin@hr-pulse.system';
-        // Try to sign in. If it fails with 'auth/invalid-credential', it could be a wrong password or a non-existent user.
-        // We'll try to create it in the catch block.
+        // Try to sign in. If it fails, create the user and sign in again.
         try {
             await signInWithEmailAndPassword(auth, adminEmail, password);
         } catch (error: any) {
-            if (error.code === 'auth/invalid-credential') {
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
                 try {
-                    // This will succeed if the user doesn't exist.
                     await createUserWithEmailAndPassword(auth, adminEmail, password);
-                    // After creating, sign in again to establish the session.
                     await signInWithEmailAndPassword(auth, adminEmail, password);
                 } catch (creationError: any) {
-                    // This will fail if the user *does* exist, which means the original error was a wrong password.
                     if (creationError.code === 'auth/email-already-in-use') {
                          toast({ variant: "destructive", title: "فشل دخول المدير", description: "كلمة مرور المدير غير صحيحة." });
                     } else {
-                        // Another error occurred during creation
                          throw creationError;
                     }
                     setIsLoading(false);
                     return;
                 }
             } else {
-                throw error; // Re-throw other unexpected sign-in errors
+                throw error;
             }
         }
         toast({ title: "تم تسجيل الدخول كمدير للنظام" });
-        setIsLoading(false);
         // The useEffect will handle redirection.
-        return;
       } catch (error: any) {
         console.error("Admin login/creation failed:", error);
         toast({ variant: "destructive", title: "فشل دخول المدير", description: "لم نتمكن من تسجيل دخول أو إنشاء حساب المدير." });
+      } finally {
         setIsLoading(false);
-        return;
       }
+      return;
     }
 
+    // --- Custom Database Authentication for regular employees ---
     try {
-        // Instead of querying Firestore, we will now try to sign in directly
-        // with a constructed email address.
-        const email = `${employeeIdInput}@hr-pulse.system`;
-
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const employeesRef = collection(firestore, 'employees');
+        const q = query(employeesRef, where("employeeId", "==", employeeIdInput));
         
-        // After successful login, get the employee data to check for device verification
-        const employeeDocRef = doc(firestore, 'employees', userCredential.user.uid);
-        const employeeSnap = await getDoc(employeeDocRef);
+        const querySnapshot = await getDocs(q).catch(error => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: employeesRef.path,
+            operation: 'list',
+          }));
+          throw error;
+        });
 
-        if (!employeeSnap.exists()) {
-             throw new Error("Employee data not found after login.");
+        if (querySnapshot.empty) {
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم غير موجود." });
+            setIsLoading(false);
+            return;
         }
-        
-        const employeeData = employeeSnap.data() as Employee;
-        const deviceFingerprint = getDeviceFingerprint();
 
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = employeeDoc.data() as Employee;
+        
+        // This is a temporary solution for plaintext passwords. 
+        // In a real app, you would compare hashed passwords.
+        if (employeeData.password !== password) {
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "كلمة المرور غير صحيحة." });
+            setIsLoading(false);
+            return;
+        }
+
+        // --- At this point, credentials are correct. Sign in the user. ---
+        
+        // We use anonymous sign-in to get a temporary user session,
+        // then we will attach the real employee ID to it.
+        const userCredential = await signInAnonymously(auth);
+        
+        // This is a trick to associate the anonymous user with the real employee document.
+        // We are marking the user object with the doc id.
+        // The FirebaseProvider will see this and fetch the correct roles.
+        (userCredential.user as any).firestoreDocId = employeeDoc.id;
+
+        // Now, perform device verification
+        const deviceFingerprint = getDeviceFingerprint();
         if (employeeData.deviceVerificationEnabled) {
             if (!employeeData.deviceId) {
                 // First login, register device ID
-                await updateDoc(employeeDocRef, { deviceId: deviceFingerprint });
+                await updateDoc(employeeDoc.ref, { deviceId: deviceFingerprint });
             } else if (employeeData.deviceId !== deviceFingerprint) {
                 await auth.signOut(); // Sign out user
                 toast({ variant: "destructive", title: "فشل التحقق من الجهاز", description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب." });
@@ -142,25 +161,22 @@ export default function LoginPage() {
                 return;
             }
         }
-
+        
         toast({
             title: "تم تسجيل الدخول بنجاح",
             description: "جاري توجيهك...",
         });
-        
-        // The useUser hook will now re-evaluate and find the roles based on the UID.
+
+        // Refresh the page to trigger the useUser hook with the new auth state.
+        // The useEffect at the top of the component will handle redirection.
         router.refresh();
 
     } catch (error: any) {
       console.error("Login Error:", error);
-      let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-      if (error.code === 'auth/invalid-credential') {
-        description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
-      }
       toast({
         variant: "destructive",
         title: "فشل تسجيل الدخول",
-        description: description,
+        description: "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.",
       });
     } finally {
       setIsLoading(false);
