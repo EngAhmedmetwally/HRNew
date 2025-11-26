@@ -48,7 +48,7 @@ export default function PayrollPage() {
 
   const canView = roles.isAdmin || roles.isHr;
 
-  const payrollsQuery = useMemoFirebase(()_=>{
+  const payrollsQuery = useMemoFirebase(()=>{
     if (!firestore || !canView || !dateRange?.from) return null;
     
     // We filter by month and year of the start date. This is a simplification.
