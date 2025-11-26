@@ -29,7 +29,7 @@ import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
 import { useFirebase } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import {
   Select,
   SelectContent,
@@ -83,14 +83,29 @@ export default function NewEmployeePage() {
     }
 
     try {
+      // 1. Check if employeeId already exists in Firestore
+      const employeesRef = collection(firestore, 'employees');
+      const q = query(employeesRef, where("employeeId", "==", data.employeeId));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        toast({
+          variant: 'destructive',
+          title: 'رقم الموظف مستخدم',
+          description: 'رقم الموظف الذي أدخلته موجود بالفعل. يرجى استخدام رقم آخر.',
+        });
+        form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
+        return;
+      }
+      
       const email = `${data.employeeId}@hr-pulse.system`;
       const { password, role, ...employeeData } = data;
 
-      // 1. Create the user in Firebase Auth
+      // 2. Create the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // 2. Prepare the employee document for Firestore
+      // 3. Prepare the employee document for Firestore
       const employeeDoc = {
         ...employeeData,
         id: user.uid,
@@ -98,13 +113,16 @@ export default function NewEmployeePage() {
         department: '', // Default department
       };
 
-      // 3. Save the employee document to Firestore
+      // 4. Save the employee document and role in a batch
       const employeeDocRef = doc(firestore, 'employees', user.uid);
       await setDoc(employeeDocRef, employeeDoc);
 
-      // 4. Handle role assignment (optional, can be done later via edit page)
-      // This part is kept separate to avoid permission issues during creation
-      // For now, we just create the employee. Admin can assign roles later.
+      // 5. Handle role assignment based on selection
+      if (role === 'admin') {
+        await setDoc(doc(firestore, 'roles_admin', user.uid), { uid: user.uid });
+      } else if (role === 'hr') {
+        await setDoc(doc(firestore, 'roles_hr', user.uid), { uid: user.uid });
+      }
 
       toast({
         title: 'تمت إضافة الموظف بنجاح',
@@ -116,7 +134,8 @@ export default function NewEmployeePage() {
       console.error("Employee Creation Error:", error);
       let description = "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.";
       if (error.code === 'auth/email-already-in-use') {
-        description = "رقم الموظف هذا مستخدم بالفعل.";
+        // This case should be rare now, but good to keep as a fallback
+        description = "رقم الموظف هذا مستخدم بالفعل في نظام المصادقة.";
       } else if (error.code === 'permission-denied') {
          description = "ليس لديك الصلاحية لإنشاء موظفين جدد. يرجى مراجعة مدير النظام.";
       }
@@ -155,7 +174,7 @@ export default function NewEmployeePage() {
                 تفاصيل الحساب الأساسية والبيانات الوظيفية للموظف.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-6 grid-cols-1">
+            <CardContent className="space-y-6">
               <FormField
                 control={form.control}
                 name="name"
