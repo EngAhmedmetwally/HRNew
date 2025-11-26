@@ -13,11 +13,11 @@ rules_version = '2';
  *
  * @philosophy
  * Core Philosophy: The security model defines three primary roles:
- * 1. Admin: Super-user with full read/write access to all data, including role management.
- * 2. HR: Can manage employee records, attendance, and payroll. Cannot manage system policies or roles.
+ * 1. Admin: Super-user with full read/write access to all data, including role management. Identified by email 'admin@hr-pulse.system'.
+ * 2. HR: Can manage employee records, attendance, and payroll.
  * 3. Employee: Can only read their own personal data (profile, attendance, payroll).
  *
- * Roles are determined by the existence of a user's UID in the /roles_admin or /roles_hr collections.
+ * Roles are determined by the existence of a user's UID in the /roles_admin or /roles_hr collections, with a special override for the super-admin.
  * All access requires user authentication.
  *
  * @structure
@@ -30,7 +30,7 @@ rules_version = '2';
  *
  * @decisions
  * Key Security Decisions:
- * - Role-Based Access: Uses `exists()` checks against role collections (/roles_admin, /roles_hr) for performant and clear permissioning.
+ * - Role-Based Access: Uses `exists()` checks against role collections (/roles_admin, /roles_hr) for performant and clear permissioning. The super-admin is a special case checked by email.
  * - Strict Ownership: An employee's access to their own data is enforced using the `employeeId` in the document path or field, assuming it matches their authentication UID.
  * - Segregated Listing: To prevent data leaks, `list` operations on collections containing mixed private data (like attendance or payroll) are restricted to Admin/HR roles. Employees can only `get` their specific documents by their known ID.
  * - Immutable Ownership Links: Once an employee-specific record (like a payroll or workday) is created, its link to the employee (the `employeeId` field) cannot be changed.
@@ -52,10 +52,14 @@ service cloud.firestore {
 
     /**
      * Checks if the currently authenticated user has an Admin role.
-     * An Admin is defined by the existence of their UID in the /roles_admin collection.
+     * An Admin is defined by the existence of their UID in the /roles_admin collection,
+     * OR by having the specific super-admin email address.
      */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@hr-pulse.system' ||
+        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))
+      );
     }
 
     /**
@@ -98,7 +102,7 @@ service cloud.firestore {
     match /employees/{employeeId} {
       allow get: if isOwner(employeeId) || isHrOrAdmin();
       allow list: if isHrOrAdmin();
-      allow create: if isSignedIn() && request.resource.data.id == employeeId;
+      allow create: if isHrOrAdmin(); // Only HR or Admin can create new employees.
       allow update: if isHrOrAdmin() && resource != null && request.resource.data.id == resource.data.id;
       allow delete: if isHrOrAdmin() && resource != null;
     }
@@ -131,26 +135,26 @@ service cloud.firestore {
      * @principle Provides public read access for configuration data while securing writes to admin-level roles.
      */
     match /deductionPolicies/{deductionPolicyId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list, create, update, delete: if isAdmin();
+    }
+    
+    match /settings/{docId} {
+      allow get, list, create, update, delete: if isAdmin();
     }
 
     /**
      * @description Stores sensitive monthly payroll records. An employee can only read their own record.
      *   Creation and modification are restricted to HR and Admins.
-     * @path /payrolls/{year}/{month}/{employeeId}
+     * @path /payrolls/{payrollId}
      * @allow (get) Employee 'emp123' reads their own payroll for a given month.
      * @deny (update) Employee 'emp123' tries to modify their own payroll document.
      * @deny (list) Employee 'emp123' tries to list all payrolls for a given month.
      * @principle Enforces strict ownership for highly sensitive data, with write access limited to privileged roles.
      */
-    match /payrolls/{year}/{month}/{employeeId} {
-      allow get: if isOwner(employeeId) || isHrOrAdmin();
+    match /payrolls/{payrollId} {
+      allow get: if isHrOrAdmin() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
       allow list: if isHrOrAdmin();
-      allow create: if isHrOrAdmin() && request.resource.data.employeeId == employeeId;
+      allow create: if isHrOrAdmin();
       allow update: if isHrOrAdmin() && resource != null && request.resource.data.employeeId == resource.data.employeeId;
       allow delete: if isHrOrAdmin() && resource != null;
     }
