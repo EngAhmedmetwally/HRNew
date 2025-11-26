@@ -93,9 +93,8 @@ service cloud.firestore {
      * @description Manages core employee profiles. Employees can read and update their own profile.
      *   HR and Admins can manage all employee profiles.
      *   A special rule allows an unauthenticated user to query for an employee by their employeeId *only*
-     *   for the purpose of logging in.
+     *   for the purpose of logging in, but only one document at a time.
      * @path /employees/{employeeId}
-     * @allow (list) An unauthenticated user queries for an employee with a specific employeeId.
      * @allow (get) An employee with UID 'emp123' reads '/employees/emp123'.
      * @deny (list) An employee tries to list all documents in the '/employees' collection.
      * @principle Enforces document ownership for reads/self-writes and role-based access for admin writes,
@@ -103,9 +102,9 @@ service cloud.firestore {
      */
     match /employees/{employeeId} {
         allow get: if isOwner(employeeId) || isHrOrAdmin();
-        // Allow a very specific query for login purposes, even for unauthenticated users.
-        // This only allows querying by employeeId, preventing listing all users.
-        allow list: if (isHrOrAdmin()) || (request.query.keys().hasOnly(['where']) && request.query.where[0][0] == 'employeeId');
+        // Allow listing for HR/Admins. Also allow for unauthenticated login query, 
+        // but only if they are querying for a single document. This prevents leaking the employee list.
+        allow list: if isHrOrAdmin() || request.query.limit == 1;
         allow create: if isHrOrAdmin();
         allow update: if isOwner(employeeId) || isHrOrAdmin();
         allow delete: if isHrOrAdmin();

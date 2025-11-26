@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, limit } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
@@ -75,7 +75,6 @@ export default function LoginPage() {
     // Hardcoded super admin check
     if (employeeIdInput === 'admin' && password === '123456') {
       try {
-        // Try to sign in. If it fails, create the user and sign in again.
         try {
             await signInWithEmailAndPassword(auth, email, password);
         } catch (error: any) {
@@ -97,7 +96,6 @@ export default function LoginPage() {
             }
         }
         toast({ title: "تم تسجيل الدخول كمدير للنظام" });
-        // The useEffect will handle redirection.
       } catch (error: any) {
         console.error("Admin login/creation failed:", error);
         toast({ variant: "destructive", title: "فشل دخول المدير", description: "لم نتمكن من تسجيل دخول أو إنشاء حساب المدير." });
@@ -110,7 +108,7 @@ export default function LoginPage() {
     // --- Database-first authentication for regular employees ---
     try {
         const employeesRef = collection(firestore, 'employees');
-        const q = query(employeesRef, where('employeeId', '==', employeeIdInput));
+        const q = query(employeesRef, where('employeeId', '==', employeeIdInput), limit(1));
         
         const querySnapshot = await getDocs(q).catch(error => {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -135,11 +133,18 @@ export default function LoginPage() {
             return;
         }
         
-        // At this point, username and password from DB are correct.
-        // Now, sign in to Firebase Auth to establish a session.
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error: any) {
+             if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+                await createUserWithEmailAndPassword(auth, email, password);
+                await signInWithEmailAndPassword(auth, email, password);
+             } else {
+                throw error;
+             }
+        }
         
-        // After successful login, get the employee data to check for device verification
+        // After successful login, check for device verification
         const deviceFingerprint = getDeviceFingerprint();
         if (employeeData.deviceVerificationEnabled) {
             if (!employeeData.deviceId) {
@@ -158,20 +163,15 @@ export default function LoginPage() {
             description: "جاري توجيهك...",
         });
 
-        // The useEffect at the top of the component will handle redirection.
         router.refresh();
 
     } catch (error: any) {
       console.error("Login Error:", error);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
-          toast({ variant: "destructive", title: "فشل المصادقة", description: "حساب الموظف غير مهيأ بشكل صحيح في نظام المصادقة." });
-      } else {
-         toast({
-           variant: "destructive",
-           title: "فشل تسجيل الدخول",
-           description: error.message || "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
-         });
-      }
+       toast({
+         variant: "destructive",
+         title: "فشل تسجيل الدخول",
+         description: error.message || "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+       });
     } finally {
       setIsLoading(false);
     }
