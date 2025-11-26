@@ -87,11 +87,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             // For regular users, fetch their employee document to get permissions
             const employeeDocRef = doc(firestore, 'employees', firebaseUser.uid);
             try {
-                const employeeSnap = await getDoc(employeeDocRef).catch(e => {
-                    const contextualError = new FirestorePermissionError({ operation: 'get', path: employeeDocRef.path });
-                    errorEmitter.emit('permission-error', contextualError);
-                    throw e; // re-throw original error
-                });
+                const employeeSnap = await getDoc(employeeDocRef);
                 
                 let userPermissions: UserPermissions = { isAdmin: false, screens: [] };
 
@@ -104,8 +100,12 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                 setUserAuthState({ user: firebaseUser, permissions: userPermissions, isUserLoading: false, userError: null });
             } catch (error) {
                 console.error("FirebaseProvider: Error fetching user permissions:", error);
-                // Set default (non-privileged) permissions on error, but keep the user object
-                 setUserAuthState({ user: firebaseUser, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: error as Error });
+                 // If fetching permissions fails, create and emit a contextual error
+                const contextualError = new FirestorePermissionError({ operation: 'get', path: employeeDocRef.path });
+                errorEmitter.emit('permission-error', contextualError);
+
+                // Set a generic error state, but keep the user object so they are still 'logged in'
+                 setUserAuthState({ user: firebaseUser, permissions: { isAdmin: false, screens: [] }, isUserLoading: false, userError: contextualError });
             }
         } else {
             // No user is signed in
