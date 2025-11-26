@@ -77,7 +77,8 @@ export default function PayrollPage() {
     const employeeMap = new Map(employees.map(e => [e.id, e.name]));
     return payrolls.map(p => ({
       ...p,
-      employeeName: employeeMap.get(p.employeeId) || 'موظف غير معروف'
+      employeeName: employeeMap.get(p.employeeId) || 'موظف غير معروف',
+      status: 'pending' // Default status
     }));
   }, [payrolls, employees]);
 

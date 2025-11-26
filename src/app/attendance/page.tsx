@@ -23,6 +23,7 @@ import type { WorkDay, Employee } from '@/lib/types';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { findImage } from '@/lib/placeholder-images';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { useMemo } from 'react';
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -62,7 +63,7 @@ export default function AttendanceLogPage() {
 
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
-  const combinedData: CombinedWorkDay[] = useMemoFirebase(() => {
+  const combinedData: CombinedWorkDay[] = useMemo(() => {
     if (!workDays || !employees) return [];
     
     const employeesMap = new Map(employees.map(e => [e.id, e]));
@@ -108,59 +109,109 @@ export default function AttendanceLogPage() {
           <div className="flex justify-center items-center h-48">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
+        ) : combinedData.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+             <p>لا توجد سجلات حضور حتى الآن.</p>
+          </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الموظف</TableHead>
-                <TableHead>وقت الحضور</TableHead>
-                <TableHead>وقت الانصراف</TableHead>
-                <TableHead>الحالة</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {combinedData.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell>
-                    {record.employee ? (
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage
-                          src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl}
-                          alt="Avatar"
-                        />
-                        <AvatarFallback>
-                          {record.employee.name.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="font-medium">{record.employee.name}</div>
-                    </div>
-                     ) : (
-                        <div className="font-medium">{record.employeeId}</div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}
-                  </TableCell>
-                  <TableCell>
-                    {record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={
-                        record.delayMinutes > 0
-                          ? statusMap.late.className
-                          : statusMap['on-time'].className
-                      }
-                    >
-                      {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <>
+            {/* Mobile View */}
+             <div className="md:hidden">
+                <div className="space-y-4">
+                  {combinedData.map((record) => (
+                      <Card key={record.id} className="bg-muted/50">
+                        <CardHeader className="p-4 flex flex-row items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {record.employee ? (
+                                <>
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl} alt="Avatar" />
+                                    <AvatarFallback>{record.employee.name.charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <CardTitle className="text-lg">{record.employee.name}</CardTitle>
+                                </>
+                              ) : (
+                                  <CardTitle className="text-lg">{record.employeeId}</CardTitle>
+                              )}
+                            </div>
+                            <Badge
+                              variant="secondary"
+                              className={record.delayMinutes > 0 ? statusMap.late.className : statusMap['on-time'].className}
+                            >
+                              {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
+                            </Badge>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 text-sm">
+                          <div className="flex justify-between border-t pt-2 mt-2">
+                              <p className="text-muted-foreground">وقت الحضور</p>
+                              <p className="font-semibold">{record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}</p>
+                          </div>
+                          <div className="flex justify-between mt-2">
+                              <p className="text-muted-foreground">وقت الانصراف</p>
+                              <p>{record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                  ))}
+                </div>
+            </div>
+
+            {/* Desktop View */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>الموظف</TableHead>
+                    <TableHead>وقت الحضور</TableHead>
+                    <TableHead>وقت الانصراف</TableHead>
+                    <TableHead>الحالة</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {combinedData.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell>
+                        {record.employee ? (
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage
+                              src={findImage(`avatar${(parseInt(record.employee.employeeId.slice(-1)) % 5) + 1}`)?.imageUrl}
+                              alt="Avatar"
+                            />
+                            <AvatarFallback>
+                              {record.employee.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="font-medium">{record.employee.name}</div>
+                        </div>
+                         ) : (
+                            <div className="font-medium">{record.employeeId}</div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {record.checkInTime?.toDate().toLocaleTimeString('ar-EG') || '---'}
+                      </TableCell>
+                      <TableCell>
+                        {record.checkOutTime?.toDate().toLocaleTimeString('ar-EG') || '--:--'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            record.delayMinutes > 0
+                              ? statusMap.late.className
+                              : statusMap['on-time'].className
+                          }
+                        >
+                          {record.delayMinutes > 0 ? 'متأخر' : 'في الوقت المحدد'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

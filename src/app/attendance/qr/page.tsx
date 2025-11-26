@@ -9,43 +9,45 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useFirebase, useUser } from "@/firebase";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
+import { useDoc, useFirebase, useUser } from "@/firebase";
+import { addDoc, collection, doc, Timestamp } from "firebase/firestore";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-
-// This would come from settings in a real app
-const QR_VALIDITY_SECONDS = 5;
 
 export default function QrCodePage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [countdown, setCountdown] = useState(QR_VALIDITY_SECONDS);
+  const [countdown, setCountdown] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const timerRef = useRef<NodeJS.Timeout>();
   const isMountedRef = useRef(true);
+  
+  const settingsDocRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'settings', 'global');
+  }, [firestore]);
+
+  const { data: storedSettings } = useDoc(settingsDocRef);
+  const qrValiditySeconds = storedSettings?.settings?.qrRefreshRate || 10;
   
   const canView = roles.isAdmin || roles.isHr;
 
   const generateQrCode = useCallback(async () => {
     if (!firestore || !isMountedRef.current || !canView) return;
     
-    // Set loading to true only if it's not the initial load, to avoid flicker
-    if (qrCodeUrl) {
-       // No need to set loading, it will be a fast swap
-    } else {
+    if (!qrCodeUrl) {
        setIsLoading(true);
     }
 
     try {
       const now = Timestamp.now();
-      const validUntil = new Timestamp(now.seconds + QR_VALIDITY_SECONDS, now.nanoseconds);
+      const validUntil = new Timestamp(now.seconds + qrValiditySeconds, now.nanoseconds);
       const secret = Math.random().toString(36).substring(2);
 
       const qrCodeDoc = {
-        sessionId: "session-123",
+        sessionId: `session-${Date.now()}`,
         date: now,
         type: "attendance",
         token: secret,
@@ -60,27 +62,25 @@ export default function QrCodePage() {
 
       if (isMountedRef.current) {
         setQrCodeUrl(newQrCodeUrl);
-        setCountdown(QR_VALIDITY_SECONDS);
+        setCountdown(qrValiditySeconds);
         setIsLoading(false);
-        // Schedule the next generation after this one is successful
-        timerRef.current = setTimeout(generateQrCode, QR_VALIDITY_SECONDS * 1000);
+        timerRef.current = setTimeout(generateQrCode, qrValiditySeconds * 1000);
       }
 
     } catch (error) {
       console.error("Error generating QR code:", error);
       if (isMountedRef.current) {
         setIsLoading(false);
-        // Retry after a short delay in case of an error
-        timerRef.current = setTimeout(generateQrCode, QR_VALIDITY_SECONDS * 1000);
+        timerRef.current = setTimeout(generateQrCode, qrValiditySeconds * 1000);
       }
     }
-  }, [firestore, qrCodeUrl, canView]);
+  }, [firestore, qrCodeUrl, canView, qrValiditySeconds]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    if (firestore && canView) {
+    if (firestore && canView && storedSettings !== undefined) {
       generateQrCode();
-    } else if (!isUserLoading) {
+    } else if (!isUserLoading && !canView) {
         setIsLoading(false);
     }
 
@@ -90,7 +90,7 @@ export default function QrCodePage() {
         clearTimeout(timerRef.current);
       }
     };
-  }, [firestore, generateQrCode, canView, isUserLoading]);
+  }, [firestore, generateQrCode, canView, isUserLoading, storedSettings]);
 
   useEffect(() => {
     if (isLoading || !qrCodeUrl) return;
@@ -102,7 +102,7 @@ export default function QrCodePage() {
     return () => clearInterval(countdownTimer);
   }, [isLoading, qrCodeUrl]);
 
-  if (isUserLoading) {
+  if (isUserLoading || (canView && storedSettings === undefined)) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -131,7 +131,7 @@ export default function QrCodePage() {
           <CardHeader className="text-center">
             <CardTitle>إنشاء QR Code للحضور</CardTitle>
             <CardDescription>
-              يتم تحديث الكود تلقائيًا كل {QR_VALIDITY_SECONDS} ثوانٍ.
+              {`يتم تحديث الكود تلقائيًا كل ${qrValiditySeconds} ثوانٍ.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center text-center">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDoc, useFirebase, useMemoFirebase, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -35,7 +35,7 @@ const defaultSettingsData = {
     settings: {
         checkInTime: '09:00',
         checkOutTime: '17:00',
-        qrRefreshRate: 60,
+        qrRefreshRate: 10,
         gracePeriod: 15,
         locationLat: '24.7136',
         locationLng: '46.6753',
@@ -70,8 +70,12 @@ export default function SettingsPage() {
     if (storedSettings) {
         setSettings(storedSettings.settings || defaultSettingsData.settings);
         setDeductionLevels(storedSettings.deductionLevels || defaultSettingsData.deductionLevels);
+    } else if (!isLoadingSettings && canView && firestore) {
+        // If no settings doc exists, create one with defaults
+        const docRef = doc(firestore, 'settings', 'global');
+        setDocumentNonBlocking(docRef, defaultSettingsData, {});
     }
-  }, [storedSettings]);
+  }, [storedSettings, isLoadingSettings, canView, firestore]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
