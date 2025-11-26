@@ -121,9 +121,9 @@ export default function AttendanceLogPage() {
 
   useMemo(() => {
     if (workDays && workDays.length > 0) {
-        const docSnapshots = (workDays as any)._docs.map((doc: any) => doc._document.proto); // This is a hacky way to get the snapshot
-        setFirstVisible(workDays[0] as any);
-        setLastVisible(workDays[workDays.length - 1] as any);
+        // use the _snapshot property from our custom hook
+        setFirstVisible(workDays[0]._snapshot);
+        setLastVisible(workDays[workDays.length - 1]._snapshot);
     } else {
         setFirstVisible(null);
         setLastVisible(null);
@@ -278,7 +278,7 @@ export default function AttendanceLogPage() {
                     السابق
                 </Button>
                 <span className="text-sm text-muted-foreground">صفحة {page}</span>
-                <Button variant="outline" onClick={handleNext} disabled={!lastVisible || (workDays && workDays.length < PAGE_SIZE)}>
+                <Button variant="outline" onClick={handleNext} disabled={!lastVisible || (!!workDays && workDays.length < PAGE_SIZE)}>
                     التالي
                     <ChevronLeft className="h-4 w-4 mr-2" />
                 </Button>
