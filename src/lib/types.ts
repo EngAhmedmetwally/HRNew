@@ -2,17 +2,17 @@ import type { ImagePlaceholder } from './placeholder-images';
 import type { Timestamp } from 'firebase/firestore';
 
 export interface Employee {
-  id: string; // Corresponds to Firebase Auth UID
+  id: string; // Corresponds to a unique ID, but not necessarily Firebase Auth UID anymore
   employeeId: string; // Custom employee ID
-  email?: string; // Internal-only email, not for user display
+  password?: string; // Stored in Firestore, not Auth
   name: string;
-  avatar?: ImagePlaceholder; // Make avatar optional as it might not be in Firestore
+  avatar?: ImagePlaceholder;
   department: string;
   jobTitle: string;
   contractType: 'full-time' | 'part-time';
-  customCheckInTime?: string; // e.g., "09:30"
-  customCheckOutTime?: string; // e.g., "15:30"
-  hireDate: string; // ISO date string
+  customCheckInTime?: string;
+  customCheckOutTime?: string;
+  hireDate: string;
   status: 'active' | 'on_leave' | 'inactive';
   baseSalary: number;
   deviceVerificationEnabled?: boolean;

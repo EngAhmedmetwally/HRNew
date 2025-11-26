@@ -20,7 +20,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
 import {
   Select,
@@ -36,7 +35,7 @@ import { ScrollArea } from '../ui/scroll-area';
 const employeeFormSchema = z.object({
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'رقم الموظف مطلوب' }),
-  password: z.string().optional(), // Optional for edit mode
+  password: z.string().optional(),
   jobTitle: z.string().min(1, { message: 'المنصب الوظيفي مطلوب' }),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
   customCheckInTime: z.string().optional(),
@@ -48,13 +47,16 @@ const employeeFormSchema = z.object({
   deviceVerificationEnabled: z.boolean().default(false),
   deviceId: z.string().optional(),
 }).refine(data => {
-    // In create mode (password is provided), it must be at least 6 chars
-    if (data.password !== undefined && data.password.length > 0 && data.password.length < 6) {
+    // In create mode (when employee is null), password is required
+    if (!data.password && !('id' in data)) { 
+        return false;
+    }
+    if (data.password && data.password.length > 0 && data.password.length < 6) {
         return false;
     }
     return true;
 }, {
-    message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+    message: 'كلمة المرور مطلوبة ويجب أن تكون 6 أحرف على الأقل',
     path: ['password'],
 });
 
@@ -71,7 +73,11 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const isEditMode = !!employee;
 
   const form = useForm<EmployeeFormValues>({
-    resolver: zodResolver(employeeFormSchema),
+    resolver: zodResolver(employeeFormSchema.refine(data => {
+        // For new employees, password is required
+        if (!isEditMode && !data.password) return false;
+        return true;
+    }, { message: "كلمة المرور مطلوبة", path: ["password"]})),
     defaultValues: {
       name: '',
       employeeId: '',
@@ -107,19 +113,9 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
              }
 
             form.reset({
-                name: employee.name,
-                employeeId: employee.employeeId,
-                jobTitle: employee.jobTitle,
-                contractType: employee.contractType,
-                customCheckInTime: employee.customCheckInTime || '',
-                customCheckOutTime: employee.customCheckOutTime || '',
-                hireDate: employee.hireDate,
-                baseSalary: employee.baseSalary,
-                status: employee.status,
+                ...employee,
                 role: role as 'employee' | 'hr' | 'admin',
-                deviceVerificationEnabled: employee.deviceVerificationEnabled ?? false,
-                deviceId: employee.deviceId ?? '',
-                password: '', // Password is not fetched, only set
+                password: '', // Clear password field for edit mode
             });
         } else {
           form.reset({
@@ -146,120 +142,72 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (isEditMode) {
-      await handleUpdate(data);
-    } else {
-      await handleCreate(data);
-    }
-  }
-
-  async function handleCreate(data: EmployeeFormValues) {
-     if (!auth || !firestore) {
-      toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
-      return;
-    }
-
-    try {
-      const employeesRef = collection(firestore, 'employees');
-      const q = query(employeesRef, where("employeeId", "==", data.employeeId));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
+    if (!firestore) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
         return;
-      }
-      
-      const email = `${data.employeeId}@hr-pulse.system`;
-      const { password, role, ...employeeData } = data;
-
-      if (data.contractType === 'full-time') {
-          employeeData.customCheckInTime = '';
-          employeeData.customCheckOutTime = '';
-      }
-
-      if (!password) { // Should be validated by schema, but as a safeguard
-        form.setError('password', { message: 'كلمة المرور مطلوبة لإنشاء موظف جديد.'});
-        return;
-      }
-
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      const employeeDoc = {
-        ...employeeData,
-        id: user.uid,
-        email: email, 
-        department: '',
-      };
-
-      const employeeDocRef = doc(firestore, 'employees', user.uid);
-      await setDoc(employeeDocRef, employeeDoc);
-
-      if (role === 'admin') {
-        await setDoc(doc(firestore, 'roles_admin', user.uid), { uid: user.uid });
-      } else if (role === 'hr') {
-        await setDoc(doc(firestore, 'roles_hr', user.uid), { uid: user.uid });
-      }
-
-      toast({
-        title: 'تمت إضافة الموظف بنجاح',
-        description: `تم إنشاء حساب للموظف ${data.name}.`,
-      });
-      onFinish();
-
-    } catch (error: any) {
-      console.error("Employee Creation Error:", error);
-      let description = "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.";
-      if (error.code === 'auth/email-already-in-use') {
-        description = "رقم الموظف هذا مستخدم بالفعل في نظام المصادقة.";
-      } else if (error.code === 'permission-denied') {
-         description = "ليس لديك الصلاحية لإنشاء موظفين جدد.";
-      }
-      toast({
-          variant: 'destructive',
-          title: 'فشل إنشاء الموظف',
-          description: description,
-        });
-    }
-  }
-
-  async function handleUpdate(data: EmployeeFormValues) {
-    if (!firestore || !employee) return;
-
-    const employeeDocRef = doc(firestore, 'employees', employee.id);
-    const { role, password, ...employeeData } = data; // Exclude password and role
-
-    if (data.contractType === 'full-time') {
-        employeeData.customCheckInTime = '';
-        employeeData.customCheckOutTime = '';
     }
 
-    try {
-        await setDoc(employeeDocRef, employeeData, { merge: true });
-
-        const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
-        const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
-
-        await Promise.all([deleteDoc(adminRoleRef), deleteDoc(hrRoleRef)]);
-
-        if (role === 'admin') {
-            await setDoc(adminRoleRef, { uid: employee.id });
-        } else if (role === 'hr') {
-            await setDoc(hrRoleRef, { uid: employee.id });
+    if (isEditMode && employee) {
+        // Update existing employee
+        const employeeDocRef = doc(firestore, 'employees', employee.id);
+        const { role, ...employeeData } = data;
+        
+        if (!employeeData.password) {
+            delete employeeData.password; // Don't update password if it's empty
         }
-    
-        toast({
-            title: 'تم تحديث بيانات الموظف بنجاح',
-        });
-        onFinish();
 
-    } catch (error: any) {
-        console.error("Error updating employee or roles:", error);
-        toast({
-            variant: "destructive",
-            title: 'فشل تحديث البيانات',
-            description: 'حدث خطأ أثناء تحديث بيانات أو صلاحيات الموظف. قد تحتاج إلى التحقق من قواعد الأمان في Firestore.',
-        });
+        try {
+            await setDoc(employeeDocRef, employeeData, { merge: true });
+
+            // Handle roles
+            const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
+            const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
+            await Promise.all([deleteDoc(adminRoleRef), deleteDoc(hrRoleRef)]);
+            if (role === 'admin') {
+                await setDoc(adminRoleRef, { uid: employee.id });
+            } else if (role === 'hr') {
+                await setDoc(hrRoleRef, { uid: employee.id });
+            }
+
+            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
+            onFinish();
+        } catch (error: any) {
+            console.error("Error updating employee:", error);
+            toast({ variant: "destructive", title: 'فشل تحديث البيانات', description: 'حدث خطأ أثناء التحديث.' });
+        }
+    } else {
+        // Create new employee
+        const employeesRef = collection(firestore, 'employees');
+        const q = query(employeesRef, where("employeeId", "==", data.employeeId));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            form.setError('employeeId', { message: 'رقم الموظف هذا مستخدم بالفعل.' });
+            return;
+        }
+
+        const { role, ...employeeData } = data;
+        const newEmployeeId = doc(employeesRef).id; // Generate a new unique ID
+
+        try {
+            const employeeDoc = {
+                ...employeeData,
+                id: newEmployeeId,
+            };
+            await setDoc(doc(firestore, 'employees', newEmployeeId), employeeDoc);
+
+            if (role === 'admin') {
+                await setDoc(doc(firestore, 'roles_admin', newEmployeeId), { uid: newEmployeeId });
+            } else if (role === 'hr') {
+                await setDoc(doc(firestore, 'roles_hr', newEmployeeId), { uid: newEmployeeId });
+            }
+            
+            toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
+            onFinish();
+        } catch (error: any) {
+            console.error("Employee Creation Error:", error);
+            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: "حدث خطأ غير متوقع." });
+        }
     }
   }
 
@@ -304,21 +252,22 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 </FormItem>
                 )}
             />
-            {!isEditMode && (
-                <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>كلمة المرور</FormLabel>
-                        <FormControl>
-                        <Input type="password" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-            )}
+            <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>كلمة المرور</FormLabel>
+                    <FormControl>
+                    <Input type="password" {...field} placeholder={isEditMode ? 'اتركه فارغًا لعدم التغيير' : ''} />
+                    </FormControl>
+                     <FormDescription>
+                        {isEditMode ? "أدخل كلمة مرور جديدة لتحديثها." : "يجب أن تكون 6 أحرف على الأقل."}
+                    </FormDescription>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
              <FormField
                 control={form.control}
                 name="jobTitle"

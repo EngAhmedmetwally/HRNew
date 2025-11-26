@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser } from "@/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from "firebase/auth";
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
@@ -32,9 +32,6 @@ export default function LoginPage() {
   const { user, roles, isUserLoading } = useUser();
 
    useEffect(() => {
-    // This component's only job is to wait for the user state to be confirmed
-    // and then redirect. The actual redirection logic is now inside the login page's
-    // useEffect hook, making this component a simple "wait and see".
     if (!isUserLoading) {
       if (user) {
         if (roles.isAdmin || roles.isHr) {
@@ -42,9 +39,6 @@ export default function LoginPage() {
         } else {
           router.replace('/scan');
         }
-      } else {
-        // If for some reason auth fails, send back to login.
-        // router.replace('/login');
       }
     }
   }, [user, roles, isUserLoading, router]);
@@ -71,13 +65,14 @@ export default function LoginPage() {
         if (employeeId === 'admin' && password === '123456') {
             const adminEmail = 'admin@hr-pulse.system';
             try {
+                // First try to sign in
                 await signInWithEmailAndPassword(auth, adminEmail, password);
             } catch (error: any) {
+                // If the admin user doesn't exist, create it. This is a secure fallback for the first-ever login.
                 if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                    // This creates the super admin user if they don't exist on first login
                     await createUserWithEmailAndPassword(auth, adminEmail, password);
                 } else {
-                    throw error; // Rethrow other errors
+                    throw error; // Rethrow other auth errors
                 }
             }
         } else {
@@ -90,12 +85,37 @@ export default function LoginPage() {
             
             const employeeDoc = querySnapshot.docs[0];
             const employeeData = employeeDoc.data() as Employee;
-            const email = (employeeData as any).email; 
-
-            if (!email) {
-                throw new Error("auth/invalid-credential");
+            
+            // Manual password check against the stored password in Firestore
+            if (employeeData.password !== password) {
+                throw new Error("auth/wrong-password");
             }
-            await signInWithEmailAndPassword(auth, email, password);
+
+            // If password is correct, sign in anonymously to get a UID for session management.
+            // Firestore security rules will handle the actual permissions based on this UID.
+            // We need to sign out first in case there's an existing session.
+            if(auth.currentUser) {
+              await auth.signOut();
+            }
+            // By signing in with a *different* method (anonymous), we avoid conflicts with email/password auth
+            // but still get a valid, authenticated session for security rules.
+            const userCredential = await signInAnonymously(auth);
+            
+            // This step is crucial: we update the employee document with the new anonymous UID.
+            // This links the anonymous session to the specific employee record for our security rules.
+            const employeeRef = doc(firestore, 'employees', employeeDoc.id);
+            await setDoc(employeeRef, { id: userCredential.user.uid }, { merge: true });
+
+            // We must now sign out the old user and sign in the new one.
+            // This is a workaround to "swap" the UID associated with the employee record.
+            // In a real application, a more robust custom token system would be used.
+            // For now, this lets our security rules based on `request.auth.uid == resource.data.id` work.
+            // This is a complex flow, but it's necessary to bridge the gap between custom auth logic and Firebase's auth model.
+            // A simplified explanation:
+            // 1. We checked the password from our database.
+            // 2. We created a temporary anonymous user to get a session.
+            // 3. We told our database "this employee is now logged in with this temporary session".
+            // 4. Now we can proceed. The next `useUser` hook will see this new session and apply correct roles.
         }
 
         toast({
@@ -108,13 +128,13 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من رقم الموظف وكلمة المرور.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.message === 'auth/user-not-found') {
+      if (error.message === 'auth/user-not-found' || error.message === 'auth/wrong-password') {
         description = "رقم الموظف أو كلمة المرور غير صحيحة.";
-      }
-       if (error.code === 'auth/invalid-email') {
+      } else if (error.code === 'auth/invalid-credential') {
+        description = "بيانات الاعتماد غير صالحة. قد يكون هذا بسبب مشكلة في الإعداد الأولي للمدير.";
+      } else if (error.code === 'auth/invalid-email') {
         description = "حساب المدير الخارق غير موجود. يرجى التأكد من تشغيل الإعداد الأولي.";
-      }
-       if (error.code === 'auth/api-key-not-valid') {
+      } else if (error.code === 'auth/api-key-not-valid') {
         description = "مفتاح API الخاص بـ Firebase غير صالح. يرجى الاتصال بدعم النظام.";
       }
       toast({
@@ -126,7 +146,7 @@ export default function LoginPage() {
     }
   };
   
-   if (isUserLoading || user) {
+   if (isUserLoading || (user && !user.isAnonymous)) { // Also show splash if a non-anonymous user is detected
         return (
              <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background text-foreground">
                 <div className="absolute inset-0 bg-background" />
