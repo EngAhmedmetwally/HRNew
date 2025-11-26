@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser } from "@/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 
@@ -59,17 +59,30 @@ export default function LoginPage() {
     const password = formData.get("password") as string;
 
     try {
-        const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
-        const querySnapshot = await getDocs(q);
+        if (employeeId === 'admin' && password === '123456') {
+            const adminEmail = 'admin@hr-pulse.system';
+            const userCredential = await signInWithEmailAndPassword(auth, adminEmail, password);
+            const adminUid = userCredential.user.uid;
 
-        if (querySnapshot.empty) {
-            // Special case for super admin login if no document found
-            if (employeeId === 'admin' && password === '123456') {
-                await signInWithEmailAndPassword(auth, 'admin@hr-pulse.system', password);
-            } else {
+            // Ensure the admin role document exists
+            const adminRoleRef = doc(firestore, 'roles_admin', adminUid);
+            await setDoc(adminRoleRef, { uid: adminUid });
+            
+            toast({
+              title: "تم تسجيل الدخول بنجاح",
+              description: "مرحبًا بك مرة أخرى!",
+            });
+            // Redirect to splash to allow roles to propagate
+            router.push('/splash');
+
+        } else {
+            const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
                 throw new Error("auth/user-not-found");
             }
-        } else {
+            
             const employeeDoc = querySnapshot.docs[0];
             const employeeData = employeeDoc.data() as Employee;
             const email = (employeeData as any).email; 
@@ -78,13 +91,12 @@ export default function LoginPage() {
                 throw new Error("auth/invalid-credential");
             }
             await signInWithEmailAndPassword(auth, email, password);
+             toast({
+                title: "تم تسجيل الدخول بنجاح",
+                description: "مرحبًا بك مرة أخرى!",
+             });
+             // The useEffect will handle the redirect for regular users
         }
-      
-      toast({
-        title: "تم تسجيل الدخول بنجاح",
-        description: "مرحبًا بك مرة أخرى!",
-      });
-      // The useEffect will handle the redirect
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من رقم الموظف وكلمة المرور.";
