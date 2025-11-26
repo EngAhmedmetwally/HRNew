@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDoc, useFirebase, useMemoFirebase, useUser, setDocumentNonBlocking } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase, useUser, setDocumentNonBlocking, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
