@@ -227,7 +227,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             const newAuthUid = userCredential.user.uid;
 
             // 2. Prepare Firestore document with the correct ID
-            const { role, password, ...employeeData } = data;
+            const { role, password, id, ...employeeData } = data;
             const employeeDocData: Omit<Employee, 'id'> & { id: string } = {
                 ...employeeData,
                 id: newAuthUid,
@@ -271,9 +271,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         } catch (error: any) {
              if (error.code === 'auth/email-already-in-use') {
                 form.setError('employeeId', { message: "اسم المستخدم (رقم الموظف) مستخدم بالفعل." });
+             } else {
+                 console.error("Create employee failed:", error);
+                 toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
              }
-             // No generic toast here either, as specific errors are emitted.
-             console.error("Create employee failed:", error);
         }
     }
   }
@@ -563,5 +564,3 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     </Form>
   );
 }
-
-    
