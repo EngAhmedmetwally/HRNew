@@ -77,7 +77,6 @@ export default function ScanPage() {
   }, [toast, user]);
   
   const recordAttendance = useCallback(async (): Promise<string> => {
-    // Add a guard clause to ensure user and firestore are available.
     if (!firestore || !user?.uid) {
         throw new Error('لم يتم العثور على جلسة مستخدم صالحة.');
     };
@@ -108,13 +107,18 @@ export default function ScanPage() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
+    const workDaysCollectionRef = collection(firestore, 'workDays');
     const workDaysQuery = query(
-        collection(firestore, 'workDays'),
+        workDaysCollectionRef,
         where('employeeId', '==', user.uid),
         where('date', '>=', Timestamp.fromDate(today))
     );
 
-    const querySnapshot = await getDocs(workDaysQuery);
+    const querySnapshot = await getDocs(workDaysQuery).catch(e => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: workDaysCollectionRef.path, operation: 'list' }));
+        throw e;
+    });
+
     const todayRecord = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
 
     if (todayRecord && todayRecord.data().checkOutTime) {
@@ -208,8 +212,6 @@ export default function ScanPage() {
     } catch(error: any) {
         const errorMessage = error.message || 'حدث خطأ غير متوقع أثناء معالجة الكود.';
         setScanResult({data: 'فشل', message: errorMessage });
-        // The toast is removed to avoid duplicating the error message shown by the dev overlay.
-        // This will catch permission errors from the getDoc call on qrCodes
         if (!(error instanceof FirestorePermissionError)) {
              console.error("An error occurred during QR scan handling:", error);
         }
