@@ -77,7 +77,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       auth,
       async (firebaseUser) => { // Auth state determined
         if (firebaseUser) {
-            // Hardcode admin role for the specific admin email
+            // Hardcode admin role for the specific admin email. This user bypasses Firestore role checks.
             if (firebaseUser.email === 'admin@hr-pulse.system') {
                 setUserAuthState({ user: firebaseUser, roles: { isAdmin: true, isHr: true }, isUserLoading: false, userError: null });
                 return;

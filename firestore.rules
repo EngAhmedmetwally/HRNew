@@ -15,9 +15,10 @@ rules_version = '2';
  * Core Philosophy: The security model defines three primary roles:
  * 1. Admin: Super-user with full read/write access to all data, including role management. Identified by email 'admin@hr-pulse.system'.
  * 2. HR: Can manage employee records, attendance, and payroll.
- * 3. Employee: Can only read their own personal data (profile, attendance, payroll).
+ * 3. Employee: Can only read/write their own personal data (profile, attendance, payroll).
  *
- * Roles are determined by the existence of a user's UID in the /roles_admin or /roles_hr collections, with a special override for the super-admin.
+ * The Admin role is determined by a hardcoded email, making it independent of Firestore data.
+ * HR roles are determined by the existence of a user's UID in the /roles_hr collection.
  * All access requires user authentication.
  *
  * @structure
@@ -25,14 +26,15 @@ rules_version = '2';
  * - /employees/{employeeId}: Core employee profiles. The document ID {employeeId} MUST match the auth UID.
  * - /workDays: All employee attendance data, keyed by a unique workDayId. Ownership is checked via the `employeeId` field in the document.
  * - /payrolls: Employee-specific data, logically partitioned by date and keyed by employeeId in the path for direct ownership checks.
- * - /deductionPolicies: System-wide configuration, readable by all, writable only by Admins.
+ * - /deductionPolicies & /settings: System-wide configuration, readable by all authenticated users, writable only by Admins.
  * - /roles_admin & /roles_hr: Collections that define user roles. Document existence grants the role.
  *
  * @decisions
  * Key Security Decisions:
- * - Role-Based Access: Uses `exists()` checks against role collections (/roles_admin, /roles_hr) for performant and clear permissioning. The super-admin is a special case checked by email.
+ * - Admin Independence: The Admin role is identified by email ('admin@hr-pulse.system'), ensuring access even if Firestore is empty or misconfigured.
+ * - Role-Based Access: Uses `exists()` checks against the /roles_hr collection for performant and clear permissioning for HR users.
  * - Strict Ownership: An employee's access to their own data is enforced using the `employeeId` in the document path or field, assuming it matches their authentication UID.
- * - Segregated Listing: To prevent data leaks, `list` operations on collections containing mixed private data (like attendance or payroll) are restricted to Admin/HR roles. Employees can only `get` their specific documents by their known ID.
+ * - Segregated Listing: To prevent data leaks, `list` operations on collections containing mixed private data (like attendance or payroll) are restricted to Admin/HR roles. Employees can only `get` their specific documents.
  * - Immutable Ownership Links: Once an employee-specific record (like a payroll or workday) is created, its link to the employee (the `employeeId` field) cannot be changed.
  * - Default Deny: All operations are denied by default unless explicitly allowed. Unauthenticated access is completely blocked.
  */
@@ -51,15 +53,11 @@ service cloud.firestore {
     }
 
     /**
-     * Checks if the currently authenticated user has an Admin role.
-     * An Admin is defined by the existence of their UID in the /roles_admin collection,
-     * OR by having the specific super-admin email address.
+     * Checks if the currently authenticated user is the hardcoded Admin.
+     * This role is independent of any Firestore documents.
      */
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'admin@hr-pulse.system' ||
-        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))
-      );
+      return isSignedIn() && request.auth.token.email == 'admin@hr-pulse.system';
     }
 
     /**
@@ -109,7 +107,7 @@ service cloud.firestore {
     }
 
     /**
-     * @description Stores daily attendance records in a single collection. Employees can create and read their own records.
+     * @description Stores daily attendance records. Employees can create and read their own records.
      * HR and Admins have full control. Listing is restricted to HR/Admin roles.
      * @path /workDays/{workDayId}
      * @allow (get) An employee reads their own attendance for a specific day.
@@ -128,21 +126,26 @@ service cloud.firestore {
 
 
     /**
-     * @description Manages global deduction policies for delays, absences, etc.
-     *   These are readable by any signed-in user but only manageable by Admins.
+     * @description Manages global deduction policies. Readable by authenticated users, writable by Admins.
      * @path /deductionPolicies/{deductionPolicyId}
      * @allow (get, list) Any authenticated employee or HR user reads the policies.
      * @deny (create) An HR user tries to create a new company-wide deduction policy.
      * @principle Provides public read access for configuration data while securing writes to admin-level roles.
      */
     match /deductionPolicies/{deductionPolicyId} {
-      allow get, list, create, update, delete: if isAdmin();
+       allow get, list: if isSignedIn();
+       allow create, update, delete: if isAdmin();
     }
     
+    /**
+     * @description Manages global system settings. Readable by authenticated users, writable by Admins.
+     * @path /settings/{docId}
+     * @allow (get) An authenticated employee reads settings for attendance checks.
+     * @deny (update) An HR user tries to change the QR code refresh rate.
+     * @principle Allows necessary read access for all users while protecting modifications.
+     */
     match /settings/{docId} {
-      // Allow any signed-in user to read settings for on-demand fetching in functions
       allow get: if isSignedIn();
-      // Only Admins can change settings
       allow list, create, update, delete: if isAdmin();
     }
 
@@ -164,35 +167,30 @@ service cloud.firestore {
     }
 
     /**
-     * @description Manages temporary QR codes for attendance. This is an internal collection
-     *   managed exclusively by HR and Admins for backend processes.
+     * @description Manages temporary QR codes for attendance. Readable by any signed-in user for verification.
+     *   Managed exclusively by HR and Admins.
      * @path /qrCodes/{qrCodeId}
-     * @allow (create) An HR user or Admin generates a new QR code for check-in.
-     * @deny (get, list, create, update, delete) An regular employee tries to perform any operation.
-     * @principle Restricts access to internal, process-specific data to authorized roles only.
+     * @allow (get) An employee's device reads a QR code to verify it.
+     * @deny (create) A regular employee tries to generate their own QR code.
+     * @principle Allows necessary read access for the core attendance feature to work, while securing management.
      */
     match /qrCodes/{qrCodeId} {
       allow get: if isSignedIn();
       allow list, create, update, delete: if isHrOrAdmin();
     }
 
-
     /**
-     * @description Defines which users are Admins. Only other Admins can manage this list.
+     * @description Defines which users are Admins. THIS COLLECTION IS DEPRECATED for role checks.
+     *   The Admin role is now hardcoded by email. This collection is only for reference.
      * @path /roles_admin/{uid}
-     * @allow (create) An existing Admin adds a new user to the admin roles.
-     * @deny (create) An HR user tries to make themselves an Admin.
-     * @principle Secures role-granting authority to the highest privilege level (self-management).
      */
     match /roles_admin/{uid} {
       allow get, list: if isHrOrAdmin();
       allow create, update, delete: if isAdmin();
     }
 
-
     /**
-     * @description Defines which users are HR personnel. Only Admins can manage this list to
-     *   prevent privilege escalation from within the HR team.
+     * @description Defines which users are HR personnel. Only Admins can manage this list.
      * @path /roles_hr/{uid}
      * @allow (create) An Admin grants HR privileges to a user.
      * @deny (create) An HR user tries to grant HR privileges to another user.
@@ -204,5 +202,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
