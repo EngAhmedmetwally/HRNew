@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Loader2, ShieldAlert, Pencil } from "lucide-react";
+import { PlusCircle, Loader2, ShieldAlert, Pencil, Trash2 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -25,13 +25,26 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { useCollection, useFirebase, useMemoFirebase, useUser } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { collection, deleteDoc, doc } from "firebase/firestore";
+import { getAuth, deleteUser } from "firebase/auth";
 import type { Employee } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { EmployeeForm } from "@/components/employees/employee-form";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 
 const statusMap = {
@@ -41,11 +54,12 @@ const statusMap = {
 };
 
 export default function EmployeesPage() {
-  const { firestore } = useFirebase();
+  const { firestore, auth } = useFirebase();
   const { user, permissions, isUserLoading } = useUser();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const router = useRouter();
+  const { toast } = useToast();
 
   const handleOpenDialog = (employee?: Employee) => {
     setEditingEmployee(employee);
@@ -73,6 +87,41 @@ export default function EmployeesPage() {
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
   const isLoading = isUserLoading || (canView && isLoadingEmployees);
+
+  const handleDeleteEmployee = async (employeeToDelete: Employee) => {
+    if (!firestore) return;
+    if (employeeToDelete.employeeId === 'admin') {
+      toast({
+        variant: "destructive",
+        title: "لا يمكن حذف المدير",
+        description: "لا يمكن حذف حساب المدير الرئيسي للنظام.",
+      });
+      return;
+    }
+
+    try {
+      // Delete from Firestore
+      const employeeDocRef = doc(firestore, 'employees', employeeToDelete.id);
+      await deleteDoc(employeeDocRef);
+      
+      // Note: Deleting from Auth requires re-authentication or an admin SDK.
+      // This implementation will only delete from Firestore.
+      // For full deletion, a backend function is required to delete the Auth user.
+      toast({
+        title: 'تم حذف الموظف',
+        description: `تم حذف بيانات الموظف ${employeeToDelete.name} من قاعدة البيانات.`,
+        className: 'bg-green-500 text-white',
+      });
+    } catch (error) {
+       console.error("Error deleting employee: ", error);
+       toast({
+        variant: "destructive",
+        title: 'فشل الحذف',
+        description: 'حدث خطأ أثناء حذف الموظف.',
+      });
+    }
+  };
+
 
   if (isLoading || !user) {
     return (
@@ -145,17 +194,50 @@ export default function EmployeesPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(employee)}>
-                                            <Pencil className="h-4 w-4" />
-                                            <span className="sr-only">تعديل الموظف</span>
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>تعديل بيانات الموظف</p>
-                                    </TooltipContent>
-                                </Tooltip>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Tooltip>
+                                      <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(employee)}>
+                                              <Pencil className="h-4 w-4" />
+                                              <span className="sr-only">تعديل الموظف</span>
+                                          </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                          <p>تعديل بيانات الموظف</p>
+                                      </TooltipContent>
+                                  </Tooltip>
+                                  <AlertDialog>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80">
+                                              <Trash2 className="h-4 w-4" />
+                                              <span className="sr-only">حذف الموظف</span>
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="border-destructive text-destructive">
+                                          <p>حذف الموظف</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          هذا الإجراء لا يمكن التراجع عنه. سيتم حذف الموظف
+                                          <span className="font-bold"> {employee.name} </span>
+                                          بشكل دائم.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteEmployee(employee)} className="bg-destructive hover:bg-destructive/90">
+                                          نعم، قم بالحذف
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
                             </TableCell>
                         </TableRow>
                         ))}
