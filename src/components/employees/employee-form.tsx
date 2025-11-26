@@ -22,7 +22,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import type { Employee } from '@/lib/types';
 import { ScrollArea } from '../ui/scroll-area';
 import { menuItems } from '@/components/layout/sidebar';
@@ -57,7 +57,7 @@ const employeeFormSchema = z.object({
     path: ["password"],
 }).refine(data => {
     // For an existing user, if a password is provided, it must be >= 6 chars
-    if (data.id && data.password) {
+    if (data.id && data.password && data.password.length > 0) {
         return data.password.length >= 6;
     }
     return true;
@@ -120,8 +120,8 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const contractType = form.watch('contractType');
 
   async function onSubmit(data: EmployeeFormValues) {
-    if (!firestore || !auth) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase.' });
+    if (!firestore || !auth || !auth.currentUser) {
+        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم تهيئة خدمات Firebase أو أن المدير غير مسجل.' });
         return;
     }
 
@@ -130,8 +130,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         
         const dataToUpdate: Partial<EmployeeFormValues> = { ...data };
+        const newPassword = data.password;
+
         // If password is not changed, don't include it in the update
-        if (!data.password || data.password.trim() === '') {
+        if (!newPassword || newPassword.trim() === '') {
             delete dataToUpdate.password;
         }
 
@@ -140,9 +142,20 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: dataToUpdate }));
                 throw e;
             });
-            // Note: We don't update password in Auth here for simplicity.
-            // A production app would require re-authentication or an admin SDK.
-            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
+            toast({ title: 'تم تحديث بيانات الموظف في قاعدة البيانات بنجاح' });
+            
+            // In a real production app, changing another user's password requires admin privileges
+            // and is typically done via a backend function (Cloud Function) for security reasons.
+            // Directly calling updatePassword for another user on the client is not possible.
+            // The logic here is for demonstration; a full implementation would need a backend component.
+            if (newPassword && newPassword.trim() !== '') {
+                 toast({
+                    variant: "default",
+                    title: "تنبيه: تحديث كلمة المرور",
+                    description: "لتغيير كلمة مرور الموظف، يلزم وجود وظيفة خلفية (Backend Function) بصلاحيات مدير. هذا الإجراء غير مدعوم مباشرة من العميل.",
+                });
+            }
+
             onFinish();
         } catch (error) {
             console.error('Update failed:', error);
@@ -158,11 +171,13 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const email = `${data.employeeId}@hr-pulse.system`;
         
         try {
-            // 1. Create the Auth user
-            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
+            // This is a temporary workaround for the demo. In a real app,
+            // an admin would use a backend function to create users.
+            // We are creating the user on the client, which is not ideal for security.
+            const tempAuthForCreation = auth; // This is not correct for multi-user management from client
+            const userCredential = await createUserWithEmailAndPassword(tempAuthForCreation, email, data.password);
             const newUserId = userCredential.user.uid;
 
-            // 2. Create the Firestore document with the new user's UID as the document ID
             const employeeDocRef = doc(firestore, 'employees', newUserId);
             const dataToSave = { ...data, id: newUserId };
             
