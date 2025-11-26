@@ -67,6 +67,22 @@ interface EmployeeFormProps {
     onFinish: () => void;
 }
 
+const defaultFormValues: EmployeeFormValues = {
+  name: '',
+  employeeId: '',
+  password: '',
+  jobTitle: '',
+  contractType: 'full-time',
+  customCheckInTime: '',
+  customCheckOutTime: '',
+  hireDate: new Date().toISOString().split('T')[0],
+  baseSalary: 0,
+  status: 'active',
+  role: 'employee',
+  deviceVerificationEnabled: false,
+  deviceId: '',
+};
+
 export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   const { toast } = useToast();
   const { auth, firestore } = useFirebase();
@@ -78,21 +94,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         if (!isEditMode && !data.password) return false;
         return true;
     }, { message: "كلمة المرور مطلوبة", path: ["password"]})),
-    defaultValues: {
-      name: '',
-      employeeId: '',
-      password: '',
-      jobTitle: '',
-      contractType: 'full-time',
-      customCheckInTime: '',
-      customCheckOutTime: '',
-      hireDate: new Date().toISOString().split('T')[0],
-      baseSalary: 0,
-      status: 'active',
-      role: 'employee',
-      deviceVerificationEnabled: false,
-      deviceId: '',
-    },
+    defaultValues: defaultFormValues,
   });
   
   useEffect(() => {
@@ -113,26 +115,16 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
              }
 
             form.reset({
+                ...defaultFormValues,
                 ...employee,
-                role: role as 'employee' | 'hr' | 'admin',
                 password: '', // Clear password field for edit mode
+                role: role as 'employee' | 'hr' | 'admin',
+                customCheckInTime: employee.customCheckInTime || '',
+                customCheckOutTime: employee.customCheckOutTime || '',
+                deviceId: employee.deviceId || '',
             });
         } else {
-          form.reset({
-              name: '',
-              employeeId: '',
-              password: '',
-              jobTitle: '',
-              contractType: 'full-time',
-              customCheckInTime: '',
-              customCheckOutTime: '',
-              hireDate: new Date().toISOString().split('T')[0],
-              baseSalary: 0,
-              status: 'active',
-              role: 'employee',
-              deviceVerificationEnabled: false,
-              deviceId: '',
-          });
+          form.reset(defaultFormValues);
         }
     }
     setFormValues();
@@ -157,7 +149,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         }
         
         if (!employeeData.deviceId) {
-            delete (employeeData as Partial<typeof employeeData>).deviceId;
+           delete (employeeData as {deviceId?: string}).deviceId;
         }
 
         try {
@@ -498,3 +490,5 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     </Form>
   );
 }
+
+    
