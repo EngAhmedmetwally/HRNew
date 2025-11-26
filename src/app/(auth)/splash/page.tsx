@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthBackground } from '@/components/auth/fingerprint-animation';
+import { AuthBackground } from '@/components/auth/auth-background';
 import { Building, Loader2 } from 'lucide-react';
 
 export default function SplashPage() {
