@@ -13,7 +13,7 @@ rules_version = '2';
  *
  * @philosophy
  * Core Philosophy: The security model defines three primary roles:
- * 1. Admin: Super-user with full read/write access to all data, including role management. Identified by existence in /roles_admin collection.
+ * 1. Admin: Super-user with full read/write access to all data, including role management. Identified by a hardcoded email or by existence in /roles_admin collection.
  * 2. HR: Can manage employee records, attendance, and payroll. Identified by existence in /roles_hr collection.
  * 3. Employee: Can only read/write their own personal data (profile, attendance, payroll).
  *
@@ -51,10 +51,13 @@ service cloud.firestore {
 
     /**
      * Checks if the currently authenticated user has an Admin role.
-     * An Admin user is defined by the existence of their UID in the /roles_admin collection.
+     * An Admin user is defined by a hardcoded email for super-user access,
+     * or by the existence of their UID in the /roles_admin collection.
      */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return isSignedIn() && 
+             (request.auth.token.email == 'admin@hr-pulse.system' || 
+              exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)));
     }
 
     /**
@@ -179,6 +182,7 @@ service cloud.firestore {
 
     /**
      * @description Defines which users are Admins. Only other Admins can manage this list.
+     * A signed-in user can check their own admin status.
      * @path /roles_admin/{uid}
      */
     match /roles_admin/{uid} {
@@ -188,6 +192,7 @@ service cloud.firestore {
 
     /**
      * @description Defines which users are HR personnel. Only Admins can manage this list.
+     * A signed-in user can check their own HR status.
      * @path /roles_hr/{uid}
      * @allow (create) An Admin grants HR privileges to a user.
      * @deny (create) An HR user tries to grant HR privileges to another user.
