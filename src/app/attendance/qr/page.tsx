@@ -37,6 +37,7 @@ export default function QrCodePage() {
   const generateQrCode = useCallback(async () => {
     if (!firestore || !isMountedRef.current || !canView) return;
     
+    // Only show loader on the very first load
     if (!qrCodeUrl) {
        setIsLoading(true);
     }
@@ -64,6 +65,8 @@ export default function QrCodePage() {
         setQrCodeUrl(newQrCodeUrl);
         setCountdown(qrValiditySeconds);
         setIsLoading(false);
+        // Clear previous timer before setting a new one
+        if(timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(generateQrCode, qrValiditySeconds * 1000);
       }
 
@@ -71,10 +74,12 @@ export default function QrCodePage() {
       console.error("Error generating QR code:", error);
       if (isMountedRef.current) {
         setIsLoading(false);
+         // Clear previous timer before setting a new one
+        if(timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(generateQrCode, qrValiditySeconds * 1000);
       }
     }
-  }, [firestore, qrCodeUrl, canView, qrValiditySeconds]);
+  }, [firestore, canView, qrValiditySeconds]);
 
   useEffect(() => {
     isMountedRef.current = true;
