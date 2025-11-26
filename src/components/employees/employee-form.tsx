@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch, updateDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import {
   Select,
@@ -138,19 +138,22 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         const { role: newRole, ...employeeData } = data;
         
+        // Make a mutable copy to work with
         const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
+
+        // Explicitly remove fields that should not be updated
         delete dataToUpdate.password;
         delete dataToUpdate.employeeId;
         
         try {
-            await setDoc(employeeDocRef, dataToUpdate, { merge: true });
+            await updateDoc(employeeDocRef, dataToUpdate);
 
             // Handle roles update
             const batch = writeBatch(firestore);
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
 
-            // Delete old roles first
+            // Always delete old roles first to handle demotions correctly
             batch.delete(adminRoleRef);
             batch.delete(hrRoleRef);
 
@@ -193,11 +196,13 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
 
                 // Create employee document in Firestore with the UID as the ID
                 const { role, ...employeeData } = data;
+                
                 const employeeDoc = {
                     ...employeeData,
-                    password: data.password, // Storing password directly in Firestore
-                    id: newAuthUid,
+                    id: newAuthUid, // Link Firestore doc to Auth UID
                 };
+                 // Don't store the password in the Firestore document
+                delete (employeeDoc as Partial<EmployeeFormValues>).password;
                 
                 const employeeDocRef = doc(firestore, 'employees', newAuthUid);
                 await setDoc(employeeDocRef, employeeDoc);
