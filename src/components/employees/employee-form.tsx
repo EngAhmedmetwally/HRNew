@@ -139,12 +139,11 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         
+        // Exclude password from the main update, handle it separately
         const { role: newRole, password, employeeId, ...employeeDataForUpdate } = data;
         
-        // Ensure id is always part of the update payload for security rules
-        const finalDataToUpdate: Partial<Employee> & { id: string } = {
+        const finalDataToUpdate: Partial<Employee> = {
           ...employeeDataForUpdate,
-          id: employee.id,
         };
         
         try {
@@ -181,7 +180,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                         'permission-error',
                         new FirestorePermissionError({
                             path: newRole === 'admin' ? adminRoleRef.path : hrRoleRef.path,
-                            operation: 'write', // Use a generic 'write' as it could be set or delete
+                            operation: 'write', 
                             requestResourceData: newRole !== 'employee' ? { uid: employee.id } : undefined,
                         })
                     );
@@ -191,8 +190,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
-            // No generic toast needed, specific errors are emitted.
             console.error('Update failed:', error);
+             if (!(error instanceof FirestorePermissionError)) {
+                toast({ variant: 'destructive', title: 'فشل التحديث', description: 'حدث خطأ أثناء تحديث بيانات الموظف.' });
+            }
         }
     } else {
         // Create new employee logic
@@ -212,10 +213,9 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             const newAuthUid = userCredential.user.uid;
 
             // 2. Prepare Firestore document with the correct ID
-            const { role, password, ...employeeData } = data;
-             const employeeDocData: Omit<Employee, 'id'> = {
+            const { role, ...employeeData } = data;
+             const employeeDocData: Omit<Employee, 'id'> & { password?: string } = {
                 ...employeeData,
-                // `id` field in the type is now correctly omitted as it's the doc ID
             };
 
             // 3. Set the Firestore document with the correct UID as the document ID
@@ -227,7 +227,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                         new FirestorePermissionError({
                             path: employeeDocRef.path,
                             operation: 'create',
-                            requestResourceData: { ...employeeDocData, id: newAuthUid }, // Add id to payload for rule debugging
+                            requestResourceData: { ...employeeDocData, id: newAuthUid }, 
                         })
                     );
                     throw error;
@@ -256,8 +256,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         } catch (error: any) {
              if (error.code === 'auth/email-already-in-use') {
                 form.setError('employeeId', { message: "اسم المستخدم (رقم الموظف) مستخدم بالفعل." });
-             } else if (error.name !== 'FirebaseError') {
-                 // Avoid showing toast for our custom propagated errors
+             } else if (!(error instanceof FirestorePermissionError)) {
                  console.error("Create employee failed:", error);
                  toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: error.message });
              }

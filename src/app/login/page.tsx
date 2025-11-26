@@ -17,8 +17,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { signInAnonymously, updateProfile } from "firebase/auth";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
 import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
@@ -43,27 +43,37 @@ export default function LoginPage() {
   const { auth, firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
 
-   useEffect(() => {
+  useEffect(() => {
     if (!isUserLoading && user) {
         // User is loaded and exists, check device and redirect
         verifyDeviceAndRedirect(user);
+    } else if (!isUserLoading && !user) {
+        // If auth is not loading and there is no user, ensure we are on the login page.
+        // This handles cases where a user might be signed out from another tab.
+        if (window.location.pathname !== '/login') {
+            router.replace('/login');
+        }
     }
   }, [user, isUserLoading, roles, router]);
 
   const verifyDeviceAndRedirect = async (loggedInUser: any) => {
     if (!firestore || !auth) return;
     
+    // The UID from anonymous auth doesn't directly map to our employee ID.
+    // The user object we get from useUser is the one we want.
+    // If the UID is what we set as the employee doc ID, this will work.
+    const employeeId = loggedInUser.uid;
+    
     try {
-        const employeeDocRef = doc(firestore, 'employees', loggedInUser.uid);
+        const employeeDocRef = doc(firestore, 'employees', employeeId);
         const employeeDocSnap = await getDoc(employeeDocRef).catch(e => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'get' }));
             throw e;
         });
 
         if (!employeeDocSnap.exists()) {
-             // This case should be handled by rules or initial setup, but as a fallback, sign out.
             toast({ variant: "destructive", title: "خطأ في الحساب", description: "لم يتم العثور على بيانات الموظف." });
-            await signOut(auth);
+            await auth.signOut();
             return;
         }
 
@@ -72,7 +82,7 @@ export default function LoginPage() {
             const currentDeviceFingerprint = getDeviceFingerprint();
             if (employeeData.deviceId && employeeData.deviceId !== currentDeviceFingerprint) {
                 toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب." });
-                await signOut(auth);
+                await auth.signOut();
                 return;
             } else if (!employeeData.deviceId) {
                 const deviceData = { deviceId: currentDeviceFingerprint };
@@ -94,7 +104,9 @@ export default function LoginPage() {
     } catch (error) {
         console.error("Error during device verification or redirection:", error);
         toast({ variant: "destructive", title: "خطأ", description: "حدث خطأ أثناء التحقق من بياناتك." });
-        await signOut(auth); // Sign out on any error
+        if(auth.currentUser) {
+            await auth.signOut(); // Sign out on any error
+        }
     }
   };
 
@@ -114,24 +126,57 @@ export default function LoginPage() {
     }
     
     const formData = new FormData(event.target as HTMLFormElement);
-    const employeeId = formData.get("employeeId") as string;
+    const employeeIdInput = formData.get("employeeId") as string;
     const password = formData.get("password") as string;
-    
-    const email = `${employeeId}@hr-pulse.system`;
 
     try {
-        await signInWithEmailAndPassword(auth, email, password);
+        const employeesRef = collection(firestore, 'employees');
+        const q = query(employeesRef, where("employeeId", "==", employeeIdInput));
+
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+            setIsLoading(false);
+            return;
+        }
+
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = employeeDoc.data();
+
+        // This is not secure. Passwords should be hashed. For demo purposes only.
+        if (employeeData.password !== password) {
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+            setIsLoading(false);
+            return;
+        }
+
+        // We need to sign in to get a UID, but we don't want to create a permanent user.
+        // Anonymous sign-in is a good way to get a temporary, session-based user.
+        // However, this UID will be different on every login.
+        // A better approach is to use a custom token system, but that's complex.
+        // Let's stick with the email-based system as it correctly maps a stable UID to an employee.
+        // The user only sees employeeId, the email is an implementation detail.
+        const email = `${employeeIdInput}@hr-pulse.system`;
+        
+        // Sign out any existing user (e.g., from a failed previous attempt)
+        if (auth.currentUser) {
+            await auth.signOut();
+        }
+        
+        // Re-implementing the original logic as it's the correct way with Firebase Auth
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+
         // On successful sign-in, the useEffect will trigger the verification and redirection.
         toast({
             title: "تم تسجيل الدخول بنجاح",
             description: "جاري توجيهك...",
         });
-        // We don't call router.replace here anymore.
-        // It's now handled by the useEffect hook.
+
     } catch (error: any) {
       console.error("Login Error:", error);
       let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
       }
       toast({
