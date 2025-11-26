@@ -70,12 +70,8 @@ export default function SettingsPage() {
     if (storedSettings) {
         setSettings(storedSettings.settings || defaultSettingsData.settings);
         setDeductionLevels(storedSettings.deductionLevels || defaultSettingsData.deductionLevels);
-    } else if (!isLoadingSettings && canView && firestore) {
-        // If no settings doc exists, create one with defaults
-        const docRef = doc(firestore, 'settings', 'global');
-        setDoc(docRef, defaultSettingsData, { merge: true });
     }
-  }, [storedSettings, isLoadingSettings, canView, firestore]);
+  }, [storedSettings]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,7 +144,6 @@ export default function SettingsPage() {
     const dataToSave = { settings, deductionLevels };
     
     try {
-      // Use setDoc with merge: true to create or update the document.
       await setDoc(settingsDocRef, dataToSave, { merge: true });
       toast({
           title: 'تم حفظ الإعدادات',
@@ -206,7 +201,7 @@ export default function SettingsPage() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="grid gap-8 grid-cols-1">
+        <div className="flex flex-col gap-8">
           <Card>
             <CardHeader>
               <CardTitle>إعدادات الحضور العامة</CardTitle>
