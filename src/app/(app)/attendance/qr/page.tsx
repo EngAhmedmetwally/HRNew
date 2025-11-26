@@ -27,7 +27,12 @@ export default function QrCodePage() {
   const generateQrCode = useCallback(async () => {
     if (!firestore || !isMountedRef.current) return;
     
-    setIsLoading(true);
+    // Set loading to true only if it's not the initial load, to avoid flicker
+    if (qrCodeUrl) {
+       // No need to set loading, it will be a fast swap
+    } else {
+       setIsLoading(true);
+    }
 
     try {
       const now = Timestamp.now();
@@ -64,7 +69,7 @@ export default function QrCodePage() {
         timerRef.current = setTimeout(generateQrCode, QR_VALIDITY_SECONDS * 1000);
       }
     }
-  }, [firestore]);
+  }, [firestore, qrCodeUrl]);
 
   useEffect(() => {
     isMountedRef.current = true;
