@@ -62,7 +62,7 @@ export function Sidebar() {
     });
 
   return (
-    <AppSidebar side="right" variant="sidebar" collapsible="icon">
+    <AppSidebar side="right" variant="sidebar" collapsible="icon" className="bg-background">
       <SidebarHeader className="h-16 justify-center">
         <Link href="/dashboard" className="flex items-center gap-2">
           <FingerprintIcon className="h-8 w-8 text-primary" />
