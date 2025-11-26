@@ -50,12 +50,13 @@ export function AnomalyDetector() {
   );
   const [showResult, setShowResult] = useState(false);
   const { firestore } = useFirebase();
-  const { user, isUserLoading } = useUser();
+  const { user, roles, isUserLoading } = useUser();
+  const canView = roles.isAdmin || roles.isHr;
 
   const employeesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !canView) return null;
     return collection(firestore, 'employees');
-  }, [firestore, user]);
+  }, [firestore, user, canView]);
 
   const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
 
@@ -88,7 +89,7 @@ export function AnomalyDetector() {
           <div className="space-y-2">
             <Label htmlFor="employeeId">الموظف</Label>
             <Select name="employeeId" required>
-              <SelectTrigger id="employeeId" disabled={isLoadingEmployees || isUserLoading}>
+              <SelectTrigger id="employeeId" disabled={isLoadingEmployees || isUserLoading || !canView}>
                 <SelectValue placeholder={(isLoadingEmployees || isUserLoading) ? "جاري تحميل الموظفين..." : "اختر موظفًا"} />
               </SelectTrigger>
               <SelectContent>
