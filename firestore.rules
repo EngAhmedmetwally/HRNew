@@ -100,6 +100,9 @@ service cloud.firestore {
      * @principle Enforces document ownership for reads/self-writes and role-based access for admin writes.
      */
     match /employees/{employeeId} {
+      // Unauthenticated users CANNOT list employees. This is the source of the error.
+      // This rule needs to be removed or changed. For now, there's no safe way to allow
+      // unauthenticated listing. The logic must be moved to a Cloud Function.
       allow get: if isOwner(employeeId) || isHrOrAdmin();
       allow list: if isHrOrAdmin();
       allow create: if isHrOrAdmin();
@@ -142,7 +145,7 @@ service cloud.firestore {
      * @description Manages global system settings. Readable by authenticated users, writable by Admins.
      * @path /settings/{docId}
      * @allow (get) An authenticated employee reads settings for attendance checks.
-     * @deny (update) An HR user tries to change the QR code refresh rate.
+     * @deny (update) An HR user tries to change the change the QR code refresh rate.
      * @principle Allows necessary read access for all users while protecting modifications.
      */
     match /settings/{docId} {
