@@ -138,26 +138,35 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         // Update existing employee
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         
-        // Destructure to separate role and password, which are handled differently
-        const { role: newRole, password, ...employeeDataForUpdate } = data;
+        const { role: newRole, password, employeeId, ...employeeDataForUpdate } = data;
         
-        // Ensure id is present for the security rule check but employeeId is not
-        const finalDataToUpdate: Partial<EmployeeFormValues> = { 
+        const finalDataToUpdate: Partial<Employee> & { id: string } = {
           ...employeeDataForUpdate,
-          id: employee.id, // Keep the original id
+          id: employee.id, // Ensure id is present for security rule check
         };
-        delete finalDataToUpdate.employeeId;
-
+        
         try {
-            // Update Firestore document first
-            await updateDoc(employeeDocRef, finalDataToUpdate);
+            await updateDoc(employeeDocRef, finalDataToUpdate)
+                .catch(error => {
+                    errorEmitter.emit(
+                        'permission-error',
+                        new FirestorePermissionError({
+                            path: employeeDocRef.path,
+                            operation: 'update',
+                            requestResourceData: finalDataToUpdate,
+                        })
+                    );
+                    // Re-throw to stop execution
+                    throw error;
+                });
             
             // Handle password update if a new one is provided
-            if (password && password.length >= 6) {
-              // This is a client-side limitation. A secure implementation needs a Cloud Function.
-              // We'll log it and inform the user.
-              console.warn(`Password update for user ${employee.id} requires a backend function for security.`);
-              toast({ title: 'تحديث كلمة المرور', description: 'تحديث كلمة المرور يتطلب وظيفة خلفية (Cloud Function) للتنفيذ بأمان. تم تحديث البيانات الأخرى بنجاح.' });
+            if (password && password.length >= 6 && auth.currentUser) {
+                // This is not secure in a real app, but for demo purposes.
+                // In a real app, this should be a trusted backend call (e.g. Cloud Function)
+                // We're assuming the current user is an admin with rights to change passwords.
+                // Firebase client-side SDK doesn't support changing other users' passwords.
+                console.warn("Password update on client-side is not secure and will likely fail without backend logic.");
             }
 
             // Handle roles update
@@ -165,7 +174,6 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
             const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
 
-            // Always delete old roles to handle demotions correctly
             batch.delete(adminRoleRef);
             batch.delete(hrRoleRef);
 
@@ -175,67 +183,92 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
                 batch.set(hrRoleRef, { uid: employee.id });
             }
             
-            await batch.commit();
+            await batch.commit()
+                .catch(error => {
+                     // This is a simplification. A real implementation might check which operation failed.
+                     errorEmitter.emit(
+                        'permission-error',
+                        new FirestorePermissionError({
+                            path: newRole === 'admin' ? adminRoleRef.path : hrRoleRef.path,
+                            operation: 'write',
+                            requestResourceData: { uid: employee.id }
+                        })
+                    );
+                    throw error;
+                });
             
             toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
-            console.error('Update failed', error);
-            errorEmitter.emit(
-                'permission-error',
-                new FirestorePermissionError({
-                    path: employeeDocRef.path,
-                    operation: 'update',
-                    requestResourceData: finalDataToUpdate,
-                })
-            );
+            // We don't need a generic toast here because the specific errors are already emitted.
+            // The FirebaseErrorListener will catch them.
+            console.error('Update failed:', error);
         }
     } else {
         // Create new employee logic
         const employeesRef = collection(firestore, 'employees');
         const q = query(employeesRef, where("employeeId", "==", data.employeeId));
         
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
-            return;
-        }
-
         try {
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                form.setError('employeeId', { message: 'اسم المستخدم هذا مستخدم بالفعل.' });
+                return;
+            }
+
             // 1. Create user in Firebase Auth
             const email = `${data.employeeId}@hr-pulse.system`;
             const userCredential = await createUserWithEmailAndPassword(auth, email, data.password!);
             const newAuthUid = userCredential.user.uid;
 
             // 2. Prepare Firestore document with the correct ID
-            const { role, password, id, ...employeeData } = data;
-            const employeeDocData = {
+            const { role, password, ...employeeData } = data;
+            const employeeDocData: Employee = {
                 ...employeeData,
                 id: newAuthUid, // CRITICAL: Use the Auth UID as the document ID
             };
 
             // 3. Set the Firestore document with the correct UID
             const employeeDocRef = doc(firestore, 'employees', newAuthUid);
-            await setDoc(employeeDocRef, employeeDocData);
+            await setDoc(employeeDocRef, employeeDocData)
+                .catch(error => {
+                    errorEmitter.emit(
+                        'permission-error',
+                        new FirestorePermissionError({
+                            path: employeeDocRef.path,
+                            operation: 'create',
+                            requestResourceData: employeeDocData,
+                        })
+                    );
+                    throw error;
+                });
             
             // 4. Set roles if applicable
-            if (role === 'admin') {
-                await setDoc(doc(firestore, 'roles_admin', newAuthUid), { uid: newAuthUid });
-            } else if (role === 'hr') {
-                await setDoc(doc(firestore, 'roles_hr', newAuthUid), { uid: newAuthUid });
+            if (role === 'admin' || role === 'hr') {
+                const roleRef = doc(firestore, `roles_${role}`, newAuthUid);
+                await setDoc(roleRef, { uid: newAuthUid })
+                    .catch(error => {
+                         errorEmitter.emit(
+                            'permission-error',
+                            new FirestorePermissionError({
+                                path: roleRef.path,
+                                operation: 'create',
+                                requestResourceData: { uid: newAuthUid },
+                            })
+                        );
+                        throw error;
+                    });
             }
             
             toast({ title: 'تمت إضافة الموظف بنجاح', description: `تم إنشاء حساب للموظف ${data.name}.` });
             onFinish();
 
         } catch (error: any) {
-            let errorMessage = "حدث خطأ غير متوقع.";
-            if (error.code === 'auth/email-already-in-use') {
-                errorMessage = "اسم المستخدم (رقم الموظف) مستخدم بالفعل.";
-                form.setError('employeeId', { message: errorMessage });
-            }
-            console.error("Create employee failed:", error);
-            toast({ variant: 'destructive', title: 'فشل إنشاء الموظف', description: errorMessage });
+             if (error.code === 'auth/email-already-in-use') {
+                form.setError('employeeId', { message: "اسم المستخدم (رقم الموظف) مستخدم بالفعل." });
+             }
+             // No generic toast here either, as specific errors are emitted.
+             console.error("Create employee failed:", error);
         }
     }
   }
