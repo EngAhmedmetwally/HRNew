@@ -46,13 +46,13 @@ export function Sidebar() {
     };
 
     const accessibleMenuItems = menuItems.filter(item => {
-        if (roles.isAdmin) return true; // Admin sees everything
-        if (!item.roles || item.roles.length === 0) return true; // Public item
-        if (!user) return false; // Must be logged in for role-based items
+        if (!user) return false;
+        if (roles.isAdmin) return true;
+        if (!item.roles || item.roles.length === 0) return true;
         
         const userRoles = new Set<string>();
         if (roles.isHr) userRoles.add('hr');
-        userRoles.add('employee'); // All authenticated users are at least employees
+        userRoles.add('employee');
         
         return item.roles.some(requiredRole => userRoles.has(requiredRole));
     });
