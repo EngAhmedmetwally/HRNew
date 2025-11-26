@@ -77,19 +77,24 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       auth,
       async (firebaseUser) => { // Auth state determined
         if (firebaseUser) {
-            // Fetch user roles for all users
-            const adminRoleRef = doc(firestore, 'roles_admin', firebaseUser.uid);
+            // Hardcode admin role for the specific admin email
+            if (firebaseUser.email === 'admin@hr-pulse.system') {
+                setUserAuthState({ user: firebaseUser, roles: { isAdmin: true, isHr: true }, isUserLoading: false, userError: null });
+                return;
+            }
+
+            // For all other users, fetch roles from Firestore
             const hrRoleRef = doc(firestore, 'roles_hr', firebaseUser.uid);
             try {
-                const [adminSnap, hrSnap] = await Promise.all([getDoc(adminRoleRef), getDoc(hrRoleRef)]);
+                const hrSnap = await getDoc(hrRoleRef);
                 const roles = {
-                    isAdmin: adminSnap.exists(),
+                    isAdmin: false, // Only the hardcoded email can be admin
                     isHr: hrSnap.exists()
                 };
                 setUserAuthState({ user: firebaseUser, roles, isUserLoading: false, userError: null });
             } catch (error) {
                 console.error("FirebaseProvider: Error fetching user roles:", error);
-                // Decide how to handle role fetching error, maybe sign out user or set default roles
+                // Set default (non-privileged) roles on error
                  setUserAuthState({ user: firebaseUser, roles: { isAdmin: false, isHr: false }, isUserLoading: false, userError: error as Error });
             }
         } else {

@@ -47,12 +47,15 @@ export function Sidebar() {
 
     const accessibleMenuItems = menuItems.filter(item => {
         if (!user) return false;
+        
+        // If user is admin, show all menu items.
         if (roles.isAdmin) return true;
+
         if (!item.roles || item.roles.length === 0) return true;
         
         const userRoles = new Set<string>();
         if (roles.isHr) userRoles.add('hr');
-        userRoles.add('employee');
+        userRoles.add('employee'); // All authenticated users are at least employees
         
         return item.roles.some(requiredRole => userRoles.has(requiredRole));
     });

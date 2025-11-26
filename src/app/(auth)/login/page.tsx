@@ -63,18 +63,13 @@ export default function LoginPage() {
             const adminEmail = 'admin@hr-pulse.system';
             try {
                 // Try to sign in first
-                const userCredential = await signInWithEmailAndPassword(auth, adminEmail, password);
-                const adminUid = userCredential.user.uid;
-                const adminRoleRef = doc(firestore, 'roles_admin', adminUid);
-                await setDoc(adminRoleRef, { uid: adminUid });
+                await signInWithEmailAndPassword(auth, adminEmail, password);
 
             } catch (error: any) {
                  // If user does not exist, create it
                 if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                    const userCredential = await createUserWithEmailAndPassword(auth, adminEmail, password);
-                    const adminUid = userCredential.user.uid;
-                    const adminRoleRef = doc(firestore, 'roles_admin', adminUid);
-                    await setDoc(adminRoleRef, { uid: adminUid });
+                    await createUserWithEmailAndPassword(auth, adminEmail, password);
+                    // The onAuthStateChanged listener in the provider will handle role setting
                 } else {
                     // Re-throw other errors
                     throw error;
@@ -85,7 +80,8 @@ export default function LoginPage() {
               title: "تم تسجيل الدخول بنجاح",
               description: "مرحبًا بك مرة أخرى أيها المدير!",
             });
-            router.push('/splash');
+            // The useEffect hook will handle redirection to /dashboard
+            router.replace('/dashboard');
 
         } else {
             const q = query(collection(firestore, "employees"), where("employeeId", "==", employeeId));
