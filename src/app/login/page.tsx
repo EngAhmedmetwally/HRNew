@@ -60,7 +60,7 @@ export default function LoginPage() {
     const employeeId = formData.get("employeeId") as string;
     const password = formData.get("password") as string;
     
-    const email = employeeId.includes('@') ? employeeId : `${employeeId}@hr-pulse.system`;
+    const email = `${employeeId}@hr-pulse.system`;
 
     try {
         await signInWithEmailAndPassword(auth, email, password);
