@@ -77,12 +77,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       auth,
       async (firebaseUser) => { // Auth state determined
         if (firebaseUser) {
-            // Hardcode admin role for the specific admin email. This user bypasses Firestore role checks.
-            if (firebaseUser.email === 'admin@hr-pulse.system') {
-                setUserAuthState({ user: firebaseUser, roles: { isAdmin: true, isHr: true }, isUserLoading: false, userError: null });
-                return;
-            }
-
             // For all other users, fetch roles from Firestore
             const adminRoleRef = doc(firestore, 'roles_admin', firebaseUser.uid);
             const hrRoleRef = doc(firestore, 'roles_hr', firebaseUser.uid);
@@ -95,6 +89,12 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                     isAdmin: adminSnap.exists(),
                     isHr: hrSnap.exists()
                 };
+                
+                // An admin should also have HR privileges
+                if (roles.isAdmin) {
+                    roles.isHr = true;
+                }
+
                 setUserAuthState({ user: firebaseUser, roles, isUserLoading: false, userError: null });
             } catch (error) {
                 console.error("FirebaseProvider: Error fetching user roles:", error);

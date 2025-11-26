@@ -13,12 +13,10 @@ rules_version = '2';
  *
  * @philosophy
  * Core Philosophy: The security model defines three primary roles:
- * 1. Admin: Super-user with full read/write access to all data, including role management. Identified by email 'admin@hr-pulse.system'.
- * 2. HR: Can manage employee records, attendance, and payroll.
+ * 1. Admin: Super-user with full read/write access to all data, including role management. Identified by existence in /roles_admin collection.
+ * 2. HR: Can manage employee records, attendance, and payroll. Identified by existence in /roles_hr collection.
  * 3. Employee: Can only read/write their own personal data (profile, attendance, payroll).
  *
- * The Admin role is determined by a hardcoded email, making it independent of Firestore data.
- * HR roles are determined by the existence of a user's UID in the /roles_hr collection.
  * All access requires user authentication.
  *
  * @structure
@@ -31,10 +29,9 @@ rules_version = '2';
  *
  * @decisions
  * Key Security Decisions:
- * - Admin Independence: The Admin role is identified by email ('admin@hr-pulse.system'), ensuring access even if Firestore is empty or misconfigured.
- * - Role-Based Access: Uses `exists()` checks against the /roles_hr collection for performant and clear permissioning for HR users.
+ * - Role-Based Access: Uses `exists()` checks against the /roles_admin and /roles_hr collections for performant and clear permissioning.
  * - Strict Ownership: An employee's access to their own data is enforced using the `employeeId` in the document path or field, assuming it matches their authentication UID.
- * - Segregated Listing: To prevent data leaks, `list` operations on collections containing mixed private data (like attendance or payroll) are restricted to Admin/HR roles. Employees can only `get` their specific documents.
+ * - Segregated Listing: To prevent data leaks, `list` operations on collections containing mixed private data are restricted to Admin/HR roles. Employees can only `get` their specific documents.
  * - Immutable Ownership Links: Once an employee-specific record (like a payroll or workday) is created, its link to the employee (the `employeeId` field) cannot be changed.
  * - Default Deny: All operations are denied by default unless explicitly allowed. Unauthenticated access is completely blocked.
  */
@@ -53,11 +50,11 @@ service cloud.firestore {
     }
 
     /**
-     * Checks if the currently authenticated user is the hardcoded Admin.
-     * This role is independent of any Firestore documents.
+     * Checks if the currently authenticated user has an Admin role.
+     * An Admin user is defined by the existence of their UID in the /roles_admin collection.
      */
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'admin@hr-pulse.system';
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
     /**
@@ -70,6 +67,7 @@ service cloud.firestore {
 
     /**
      * Checks if the user is either an HR user or an Admin.
+     * An Admin is implicitly an HR user.
      */
     function isHrOrAdmin() {
       return isAdmin() || isHr();
@@ -180,13 +178,11 @@ service cloud.firestore {
     }
 
     /**
-     * @description Defines which users are Admins. THIS COLLECTION IS DEPRECATED for role checks.
-     *   The Admin role is now hardcoded by email. This collection is only for reference.
+     * @description Defines which users are Admins. Only other Admins can manage this list.
      * @path /roles_admin/{uid}
      */
     match /roles_admin/{uid} {
-      allow get, list: if isHrOrAdmin();
-      allow create, update, delete: if isAdmin();
+      allow get, list, create, update, delete: if isAdmin();
     }
 
     /**
