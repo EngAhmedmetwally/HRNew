@@ -20,8 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, Loader2, RotateCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import {
   Select,
   SelectContent,
@@ -140,41 +140,41 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         
         const dataToUpdate: Partial<EmployeeFormValues> = { ...employeeData };
         delete dataToUpdate.password;
-        delete dataToUpdate.employeeId; // <- This is the fix
+        delete dataToUpdate.employeeId;
         
-        setDoc(employeeDocRef, dataToUpdate, { merge: true })
-            .then(async () => {
-                const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
-                const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
-                
-                let currentRole = 'employee';
-                const [isAdmin, isHr] = await Promise.all([
-                    getDoc(adminRoleRef).then(snap => snap.exists()),
-                    getDoc(hrRoleRef).then(snap => snap.exists()),
-                ]);
-                if (isAdmin) currentRole = 'admin';
-                else if (isHr) currentRole = 'hr';
+        try {
+            await setDoc(employeeDocRef, dataToUpdate, { merge: true });
 
-                if(currentRole !== newRole) {
-                    if(currentRole === 'admin') await deleteDoc(adminRoleRef);
-                    if(currentRole === 'hr') await deleteDoc(hrRoleRef);
-                    if (newRole === 'admin') await setDoc(adminRoleRef, { uid: employee.id });
-                    if (newRole === 'hr') await setDoc(hrRoleRef, { uid: employee.id });
-                }
-                
-                toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
-                onFinish();
-            })
-            .catch(error => {
-                errorEmitter.emit(
-                    'permission-error',
-                    new FirestorePermissionError({
-                        path: employeeDocRef.path,
-                        operation: 'update',
-                        requestResourceData: dataToUpdate,
-                    })
-                );
-            });
+            // Handle roles update
+            const batch = writeBatch(firestore);
+            const adminRoleRef = doc(firestore, 'roles_admin', employee.id);
+            const hrRoleRef = doc(firestore, 'roles_hr', employee.id);
+
+            // Delete old roles first
+            batch.delete(adminRoleRef);
+            batch.delete(hrRoleRef);
+
+            // Add new role if not 'employee'
+            if (newRole === 'admin') {
+                batch.set(adminRoleRef, { uid: employee.id });
+            } else if (newRole === 'hr') {
+                batch.set(hrRoleRef, { uid: employee.id });
+            }
+
+            await batch.commit();
+            
+            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
+            onFinish();
+        } catch (error) {
+            errorEmitter.emit(
+                'permission-error',
+                new FirestorePermissionError({
+                    path: employeeDocRef.path,
+                    operation: 'update',
+                    requestResourceData: dataToUpdate,
+                })
+            );
+        }
     } else {
         // Create new employee
         const employeesRef = collection(firestore, 'employees');
