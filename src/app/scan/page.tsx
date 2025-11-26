@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -13,7 +12,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Camera, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { useFirebase, useUser, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirebase, useUser } from '@/firebase';
 import { doc, getDoc, serverTimestamp, setDoc, getDocs, collection, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -24,7 +23,7 @@ export default function ScanPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [scanResult, setScanResult] = useState<{data: string, message: string} | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // Used to prevent multiple submissions
   const { toast } = useToast();
   const { firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
@@ -50,9 +49,9 @@ export default function ScanPage() {
       }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        setHasCameraPermission(true);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          setHasCameraPermission(true);
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
@@ -76,11 +75,6 @@ export default function ScanPage() {
         }
     };
   }, [toast, user]);
-
-  const startScan = () => {
-    setScanResult(null);
-    setIsScanning(true);
-  };
   
   const recordAttendance = useCallback(async () => {
       if (!firestore || !user) {
@@ -88,27 +82,23 @@ export default function ScanPage() {
         return;
       };
 
-      // Fetch employee and settings data on-demand to ensure freshness
       const employeeDocRef = doc(firestore, 'employees', user.uid);
-      const settingsDocRef = doc(firestore, 'settings', 'global');
-
       const [employeeSnap, settingsSnap] = await Promise.all([
           getDoc(employeeDocRef),
-          getDoc(settingsDocRef)
+          getDoc(doc(firestore, 'settings', 'global'))
       ]);
       
       if (!employeeSnap.exists()) {
-          toast({ variant: 'destructive', title: 'خطأ في البيانات', description: 'لم يتم العثور على بيانات الموظف.' });
+          toast({ variant: 'destructive', title: 'خطأ في البيانات', description: 'لم يتم العثور على بيانات الموظف. يرجى المحاولة مرة أخرى.' });
           return;
       }
       const employee = employeeSnap.data() as Employee;
-
+      
       if (!settingsSnap.exists()) {
         toast({ variant: 'destructive', title: 'خطأ في الإعدادات', description: 'لم يتم العثور على إعدادات النظام.' });
         return;
       }
       const storedSettings = settingsSnap.data();
-
 
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -123,8 +113,9 @@ export default function ScanPage() {
       const todayRecord = querySnapshot.docs.length > 0 ? querySnapshot.docs[0] : null;
 
       if (todayRecord && todayRecord.data().checkOutTime) {
-          toast({ variant: 'destructive', title: 'مسجل بالفعل', description: 'لقد قمت بتسجيل الحضور والانصراف لهذا اليوم.' });
-          setScanResult({data: 'فشل التسجيل', message: 'لقد قمت بتسجيل الحضور والانصراف لهذا اليوم بالفعل.'});
+          const message = 'لقد قمت بتسجيل الحضور والانصراف لهذا اليوم بالفعل.';
+          setScanResult({data: 'فشل التسجيل', message});
+          toast({ variant: 'destructive', title: 'مسجل بالفعل', description: message });
           return;
       }
       
@@ -139,8 +130,8 @@ export default function ScanPage() {
           });
           
           const successMessage = `تم تسجيل انصرافك بنجاح في ${now.toLocaleDateString('ar-EG')} الساعة ${now.toLocaleTimeString('ar-EG')}.`;
-          toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
           setScanResult({ data: `عملية ناجحة`, message: successMessage });
+          toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
 
       } else { // No record, so this is a check-in
           const isPartTimeWithCustomTime = employee.contractType === 'part-time' && employee.customCheckInTime;
@@ -171,8 +162,8 @@ export default function ScanPage() {
           await setDoc(newWorkDayRef, workDayData);
 
           const successMessage = `تم تسجيل حضورك بنجاح. دقائق التأخير: ${delayMinutes}`;
-          toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
           setScanResult({ data: `عملية ناجحة`, message: successMessage });
+          toast({ title: 'تم التسجيل بنجاح', description: successMessage, className: 'bg-green-500 text-white' });
       }
   }, [firestore, user, toast]);
 
@@ -183,7 +174,6 @@ export default function ScanPage() {
         return;
     }
     
-    // 1. Validate QR Code from Firestore
     const qrDocRef = doc(firestore, "qrCodes", qrId);
     const qrDocSnap = await getDoc(qrDocRef);
 
@@ -200,7 +190,6 @@ export default function ScanPage() {
         return;
     }
     
-    // 2. Logic to record attendance
     await recordAttendance();
     
   }, [firestore, user, recordAttendance, toast]);
@@ -209,7 +198,8 @@ export default function ScanPage() {
     let animationFrameId: number;
 
     const scan = async () => {
-      if (isScanning && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
+      // Only scan if camera is ready, user is logged in, and not currently processing a result
+      if (hasCameraPermission && !isProcessing && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
         const canvas = canvasRef.current;
         const video = videoRef.current;
         const context = canvas.getContext('2d');
@@ -224,7 +214,7 @@ export default function ScanPage() {
           });
 
           if (code && code.data) {
-            setIsScanning(false);
+            setIsProcessing(true); // Prevent further scanning
             const [qrId, qrToken] = code.data.split('|');
 
             if (qrId && qrToken) {
@@ -232,15 +222,19 @@ export default function ScanPage() {
             } else {
                 setScanResult({data: 'فشل التحقق', message: 'تنسيق بيانات الكود غير صحيح.'});
             }
+             // Allow scanning again after a delay
+            setTimeout(() => setIsProcessing(false), 3000);
           }
         }
       }
-      if (isScanning) {
+      // Continue scanning if not processing
+      if (!isProcessing) {
         animationFrameId = requestAnimationFrame(scan);
       }
     };
-
-    if (isScanning) {
+    
+    // Start scanning when camera is ready
+    if(hasCameraPermission && !isProcessing){
         animationFrameId = requestAnimationFrame(scan);
     }
 
@@ -249,7 +243,7 @@ export default function ScanPage() {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isScanning, handleSuccessfulScan]);
+  }, [hasCameraPermission, isProcessing, handleSuccessfulScan]);
   
   if(isUserLoading) {
       return (
@@ -273,11 +267,16 @@ export default function ScanPage() {
       <CardContent>
         <div className="relative aspect-video w-full overflow-hidden rounded-md border bg-muted">
           <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline />
-          {isScanning && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-               <div className="w-48 h-48 sm:w-64 sm:h-64 border-4 border-dashed border-primary rounded-lg animate-pulse"></div>
+          {hasCameraPermission && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+               <div className="w-48 h-48 sm:w-64 sm:h-64 border-4 border-dashed border-primary/70 rounded-lg animate-pulse"></div>
             </div>
           )}
+           {hasCameraPermission === null && (
+             <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             </div>
+           )}
         </div>
 
         {hasCameraPermission === false && (
@@ -290,12 +289,6 @@ export default function ScanPage() {
           </Alert>
         )}
         
-        <div className="mt-4">
-            <Button onClick={startScan} disabled={!hasCameraPermission || isScanning || !user} className="w-full">
-                {isScanning ? 'جارٍ المسح...' : 'ابدأ المسح'}
-            </Button>
-            {!user && <p className="text-center text-red-500 text-sm mt-2">يجب تسجيل الدخول أولاً لاستخدام الماسح.</p>}
-        </div>
 
         {scanResult && (
              <Alert className={`mt-4 ${scanResult.data.includes('ناجحة') ? 'border-green-500 text-green-700 dark:border-green-600 dark:text-green-400' : 'border-destructive text-destructive'}`}>
