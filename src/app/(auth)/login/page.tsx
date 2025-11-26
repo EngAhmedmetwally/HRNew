@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser } from "@/firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
@@ -61,18 +61,30 @@ export default function LoginPage() {
     try {
         if (employeeId === 'admin' && password === '123456') {
             const adminEmail = 'admin@hr-pulse.system';
-            const userCredential = await signInWithEmailAndPassword(auth, adminEmail, password);
-            const adminUid = userCredential.user.uid;
+            try {
+                // Try to sign in first
+                const userCredential = await signInWithEmailAndPassword(auth, adminEmail, password);
+                const adminUid = userCredential.user.uid;
+                const adminRoleRef = doc(firestore, 'roles_admin', adminUid);
+                await setDoc(adminRoleRef, { uid: adminUid });
 
-            // Ensure the admin role document exists
-            const adminRoleRef = doc(firestore, 'roles_admin', adminUid);
-            await setDoc(adminRoleRef, { uid: adminUid });
+            } catch (error: any) {
+                 // If user does not exist, create it
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                    const userCredential = await createUserWithEmailAndPassword(auth, adminEmail, password);
+                    const adminUid = userCredential.user.uid;
+                    const adminRoleRef = doc(firestore, 'roles_admin', adminUid);
+                    await setDoc(adminRoleRef, { uid: adminUid });
+                } else {
+                    // Re-throw other errors
+                    throw error;
+                }
+            }
             
             toast({
               title: "تم تسجيل الدخول بنجاح",
-              description: "مرحبًا بك مرة أخرى!",
+              description: "مرحبًا بك مرة أخرى أيها المدير!",
             });
-            // Redirect to splash to allow roles to propagate
             router.push('/splash');
 
         } else {
