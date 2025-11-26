@@ -153,7 +153,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         const { role, ...employeeData } = data;
         
         if (!employeeData.password) {
-            delete employeeData.password; // Don't update password if it's empty
+            delete (employeeData as Partial<typeof employeeData>).password; // Don't update password if it's empty
         }
         
         if (!employeeData.deviceId) {
@@ -224,7 +224,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
   }
 
   return (
-    <ScrollArea className="h-[70vh] sm:h-auto">
+    <ScrollArea className="max-h-[70vh] sm:max-h-none">
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-1 pr-4">
             <FormField
