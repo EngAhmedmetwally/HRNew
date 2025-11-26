@@ -100,13 +100,12 @@ service cloud.firestore {
      * @principle Enforces document ownership for reads/self-writes and role-based access for admin writes.
      */
     match /employees/{employeeId} {
-        // Unauthenticated users can list employees ONLY for login purposes.
+        // Allow unauthenticated users to query for an employee by their employeeId for login purposes.
         // This is a very specific, limited-scope query.
-        allow list: if request.query.keys().hasOnly(['where']) &&
-                     request.query.where[0][0] == 'employeeId';
-
+        allow list: if (!isSignedIn() && request.query.keys().hasOnly(['where']) && request.query.where[0][0] == 'employeeId') || isHrOrAdmin();
+        
         allow get: if isOwner(employeeId) || isHrOrAdmin();
-        allow create: if isHrOrAdmin(); // Only admins can create now
+        allow create: if isHrOrAdmin(); // Only admins/hr can create
         allow update: if isHrOrAdmin() || isOwner(employeeId);
         allow delete: if isHrOrAdmin() && resource != null;
     }
