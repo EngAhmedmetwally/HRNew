@@ -36,7 +36,7 @@ const employeeFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'اسم المستخدم (رقم الموظف) مطلوب' }),
-  password: z.string().min(6, "يجب أن تكون كلمة المرور 6 أحرف على الأقل"),
+  password: z.string().optional(),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
   customCheckInTime: z.string().optional(),
   customCheckOutTime: z.string().optional(),
@@ -47,15 +47,19 @@ const employeeFormSchema = z.object({
   deviceVerificationEnabled: z.boolean().default(false),
   deviceId: z.string().optional(),
 }).refine(data => {
-    // If it's a new user (no ID), password is required
+    // If it's a new user (no ID), password is required and must be >= 6 chars
     if (!data.id) {
         return !!data.password && data.password.length >= 6;
     }
-    // For existing user, if password is provided, it must be valid length
+    return true;
+}, {
+    message: "كلمة المرور مطلوبة للموظف الجديد ويجب أن تكون 6 أحرف على الأقل.",
+    path: ["password"],
+}).refine(data => {
+    // For an existing user, if a password is provided, it must be >= 6 chars
     if (data.id && data.password) {
         return data.password.length >= 6;
     }
-    // If it's an existing user and password is not provided, it's ok (don't update)
     return true;
 }, {
     message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل.",
@@ -125,10 +129,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         // Handle update
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         
-        const dataToUpdate = { ...data };
+        const dataToUpdate: Partial<EmployeeFormValues> = { ...data };
         // If password is not changed, don't include it in the update
-        if (!data.password) {
-            delete (dataToUpdate as Partial<typeof dataToUpdate>).password;
+        if (!data.password || data.password.trim() === '') {
+            delete dataToUpdate.password;
         }
 
         try {
