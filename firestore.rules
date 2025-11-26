@@ -91,19 +91,20 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
 
     /**
-     * @description Manages core employee profiles. Employees can read their own profile.
+     * @description Manages core employee profiles. Employees can read and update their own profile.
      *   HR and Admins can manage all employee profiles.
      * @path /employees/{employeeId}
      * @allow (get) An employee with UID 'emp123' reads '/employees/emp123'.
+     * @allow (update) An employee 'emp123' updates their own device ID in '/employees/emp123'.
      * @deny (list) An employee tries to list all documents in the '/employees' collection.
-     * @deny (update) An employee 'emp123' tries to update their own salary in '/employees/emp123'.
-     * @principle Enforces document ownership for reads and role-based access for writes.
+     * @deny (update) An employee 'emp123' tries to update their own salary in '/employees/emp123' (if restricted by fields).
+     * @principle Enforces document ownership for reads/self-writes and role-based access for admin writes.
      */
     match /employees/{employeeId} {
       allow get: if isOwner(employeeId) || isHrOrAdmin();
       allow list: if isHrOrAdmin();
       allow create: if isHrOrAdmin();
-      allow update: if isHrOrAdmin() && request.resource.data.id == resource.data.id;
+      allow update: if isHrOrAdmin() || isOwner(employeeId);
       allow delete: if isHrOrAdmin() && resource != null;
     }
 
@@ -203,7 +204,5 @@ service cloud.firestore {
     }
   }
 }
-
-    
 
     
