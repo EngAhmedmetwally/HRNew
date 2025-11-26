@@ -44,16 +44,60 @@ export default function LoginPage() {
   const { user, roles, isUserLoading } = useUser();
 
    useEffect(() => {
-    if (!isUserLoading) {
-      if (user) {
+    if (!isUserLoading && user) {
+        // User is loaded and exists, check device and redirect
+        verifyDeviceAndRedirect(user);
+    }
+  }, [user, isUserLoading, roles, router]);
+
+  const verifyDeviceAndRedirect = async (loggedInUser: any) => {
+    if (!firestore || !auth) return;
+    
+    try {
+        const employeeDocRef = doc(firestore, 'employees', loggedInUser.uid);
+        const employeeDocSnap = await getDoc(employeeDocRef).catch(e => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'get' }));
+            throw e;
+        });
+
+        if (!employeeDocSnap.exists()) {
+             // This case should be handled by rules or initial setup, but as a fallback, sign out.
+            toast({ variant: "destructive", title: "خطأ في الحساب", description: "لم يتم العثور على بيانات الموظف." });
+            await signOut(auth);
+            return;
+        }
+
+        const employeeData = employeeDocSnap.data() as Employee;
+        if (employeeData.deviceVerificationEnabled) {
+            const currentDeviceFingerprint = getDeviceFingerprint();
+            if (employeeData.deviceId && employeeData.deviceId !== currentDeviceFingerprint) {
+                toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب." });
+                await signOut(auth);
+                return;
+            } else if (!employeeData.deviceId) {
+                const deviceData = { deviceId: currentDeviceFingerprint };
+                await updateDoc(employeeDocRef, deviceData).catch(e => {
+                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: deviceData }));
+                    throw e;
+                });
+                toast({ title: "تم تسجيل الجهاز", description: "تم ربط هذا الجهاز بحسابك بنجاح." });
+            }
+        }
+        
+        // Redirect based on roles after successful verification
         if (roles.isAdmin || roles.isHr) {
           router.replace('/dashboard');
         } else {
           router.replace('/scan');
         }
-      }
+
+    } catch (error) {
+        console.error("Error during device verification or redirection:", error);
+        toast({ variant: "destructive", title: "خطأ", description: "حدث خطأ أثناء التحقق من بياناتك." });
+        await signOut(auth); // Sign out on any error
     }
-  }, [user, roles, isUserLoading, router]);
+  };
+
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -76,81 +120,31 @@ export default function LoginPage() {
     const email = `${employeeId}@hr-pulse.system`;
 
     try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const loggedInUser = userCredential.user;
-
-        // Fetch employee data to check for device verification
-        const employeeDocRef = doc(firestore, 'employees', loggedInUser.uid);
-        const employeeDocSnap = await getDoc(employeeDocRef).catch(e => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'get' }));
-            throw e;
-        });
-
-        if (!employeeDocSnap.exists()) {
-             throw new Error("لم يتم العثور على بيانات الموظف.");
-        }
-
-        const employeeData = employeeDocSnap.data() as Employee;
-
-        // Device Verification Logic
-        if (employeeData.deviceVerificationEnabled) {
-            const currentDeviceFingerprint = getDeviceFingerprint();
-            
-            if (employeeData.deviceId) {
-                // Device is already registered, check if it matches
-                if (employeeData.deviceId !== currentDeviceFingerprint) {
-                    toast({
-                        variant: "destructive",
-                        title: "فشل تسجيل الدخول",
-                        description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب.",
-                    });
-                    await signOut(auth); // Sign out the user immediately
-                    setIsLoading(false);
-                    return;
-                }
-            } else {
-                // First time login after enabling verification, register this device
-                const deviceData = { deviceId: currentDeviceFingerprint };
-                await updateDoc(employeeDocRef, deviceData).catch(e => {
-                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: deviceData }));
-                    throw e;
-                });
-                toast({
-                    title: "تم تسجيل الجهاز",
-                    description: "تم ربط هذا الجهاز بحسابك بنجاح.",
-                });
-            }
-        }
-
+        await signInWithEmailAndPassword(auth, email, password);
+        // On successful sign-in, the useEffect will trigger the verification and redirection.
         toast({
             title: "تم تسجيل الدخول بنجاح",
             description: "جاري توجيهك...",
         });
-        
-        router.replace('/splash');
-
+        // We don't call router.replace here anymore.
+        // It's now handled by the useEffect hook.
     } catch (error: any) {
       console.error("Login Error:", error);
-      // Avoid showing a generic toast if it's a permission error, as the listener will handle it.
-      if (error.name !== 'FirebaseError') {
-          let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
-          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-            description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
-          } else if (error.message) {
-            description = error.message;
-          }
-          toast({
-            variant: "destructive",
-            title: "فشل تسجيل الدخول",
-            description: description,
-          });
+      let description = "فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        description = "اسم المستخدم أو كلمة المرور غير صحيحة.";
       }
+      toast({
+        variant: "destructive",
+        title: "فشل تسجيل الدخول",
+        description: description,
+      });
     } finally {
       setIsLoading(false);
     }
   };
   
-   if (isUserLoading || user) { 
+   if (isUserLoading) { 
         return (
              <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background text-foreground">
                 <div className="absolute inset-0 bg-background" />

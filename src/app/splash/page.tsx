@@ -12,22 +12,23 @@ export default function SplashPage() {
   const { user, roles, isUserLoading } = useUser();
 
   useEffect(() => {
-    // This component's only job is to wait for the user state to be confirmed
-    // and then redirect. The actual redirection logic is now inside the login page's
-    // useEffect hook, making this component a simple "wait and see".
     if (!isUserLoading) {
       if (user) {
-        if (roles.isAdmin || roles.isHr) {
-          router.replace('/dashboard');
-        } else {
-          router.replace('/scan');
-        }
+        // The redirection logic is now handled in the login page's useEffect
+        // for better consistency and to handle device verification.
+        // This splash page now primarily serves as a loading indicator.
+        // Let's assume the login page will handle the final redirection.
+        // If the user lands here directly while logged in, the login page's
+        // useEffect will trigger and redirect them.
       } else {
-        // If for some reason auth fails, send back to login.
+        // If auth fails or user signs out, go back to login.
         router.replace('/login');
       }
     }
-  }, [user, roles, isUserLoading, router]);
+  }, [user, isUserLoading, router]);
+
+  // The redirection logic is now in `login/page.tsx`, so we just show the loading screen
+  // until `isUserLoading` is false and the user object is processed there.
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
