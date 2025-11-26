@@ -18,12 +18,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCollection, useFirebase, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, limit, startAfter, endBefore, limitToLast, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import type { WorkDay, Employee } from '@/lib/types';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert, ChevronLeft, ChevronRight } from 'lucide-react';
 import { findImage } from '@/lib/placeholder-images';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 type CombinedWorkDay = WorkDay & { employee?: Employee };
 
@@ -40,21 +41,39 @@ const statusMap = {
   },
 };
 
+const PAGE_SIZE = 25;
+
 export default function AttendanceLogPage() {
   const { firestore } = useFirebase();
   const { user, roles, isUserLoading } = useUser();
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [page, setPage] = useState(1);
+
 
   const canView = roles.isAdmin || roles.isHr;
 
   const workDaysQuery = useMemoFirebase(() => {
     if (!firestore || !user || !canView) return null;
+    if (page === 1) {
+        return query(
+          collection(firestore, 'workDays'),
+          orderBy('checkInTime', 'desc'),
+          limit(PAGE_SIZE)
+        );
+    }
+    // This is a placeholder for subsequent page queries, which will be handled by navigation buttons
     return query(
       collection(firestore, 'workDays'),
-      orderBy('checkInTime', 'desc')
+      orderBy('checkInTime', 'desc'),
+      limit(PAGE_SIZE)
     );
-  }, [firestore, user, canView]);
+  }, [firestore, user, canView, page]);
 
-  const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(workDaysQuery);
+
+  const [currentQuery, setCurrentQuery] = useState(workDaysQuery);
+
+  const { data: workDays, isLoading: isLoadingWorkDays } = useCollection<WorkDay>(currentQuery);
   
   const employeesQuery = useMemoFirebase(() => {
     if (!firestore || !user || !canView) return null;
@@ -75,8 +94,44 @@ export default function AttendanceLogPage() {
   }, [workDays, employees]);
 
   const isLoading = isUserLoading || (canView && (isLoadingWorkDays || isLoadingEmployees));
+  
+   const handleNext = () => {
+    if (!firestore || !lastVisible) return;
+    const nextQuery = query(
+      collection(firestore, 'workDays'),
+      orderBy('checkInTime', 'desc'),
+      startAfter(lastVisible),
+      limit(PAGE_SIZE)
+    );
+    setCurrentQuery(nextQuery);
+    setPage(p => p + 1);
+  };
 
-  if (isLoading) {
+  const handlePrevious = () => {
+    if (!firestore || !firstVisible) return;
+    const prevQuery = query(
+      collection(firestore, 'workDays'),
+      orderBy('checkInTime', 'desc'),
+      endBefore(firstVisible),
+      limitToLast(PAGE_SIZE)
+    );
+    setCurrentQuery(prevQuery);
+    setPage(p => p - 1);
+  };
+
+  useMemo(() => {
+    if (workDays && workDays.length > 0) {
+        const docSnapshots = (workDays as any)._docs.map((doc: any) => doc._document.proto); // This is a hacky way to get the snapshot
+        setFirstVisible(workDays[0] as any);
+        setLastVisible(workDays[workDays.length - 1] as any);
+    } else {
+        setFirstVisible(null);
+        setLastVisible(null);
+    }
+  }, [workDays]);
+
+
+  if (isLoading && combinedData.length === 0) {
     return (
         <div className="flex justify-center items-center h-full">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -105,11 +160,11 @@ export default function AttendanceLogPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoading && combinedData.length === 0 ? (
           <div className="flex justify-center items-center h-48">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : combinedData.length === 0 ? (
+        ) : combinedData.length === 0 && page === 1 ? (
           <div className="text-center py-12 text-muted-foreground">
              <p>لا توجد سجلات حضور حتى الآن.</p>
           </div>
@@ -168,7 +223,13 @@ export default function AttendanceLogPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {combinedData.map((record) => (
+                  {isLoading ? (
+                    <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center">
+                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                        </TableCell>
+                    </TableRow>
+                  ) : combinedData.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell>
                         {record.employee ? (
@@ -210,6 +271,17 @@ export default function AttendanceLogPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+             <div className="flex items-center justify-between mt-6">
+                <Button variant="outline" onClick={handlePrevious} disabled={page <= 1}>
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                    السابق
+                </Button>
+                <span className="text-sm text-muted-foreground">صفحة {page}</span>
+                <Button variant="outline" onClick={handleNext} disabled={!lastVisible || (workDays && workDays.length < PAGE_SIZE)}>
+                    التالي
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                </Button>
             </div>
           </>
         )}
