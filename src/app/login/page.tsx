@@ -107,50 +107,44 @@ export default function LoginPage() {
       return;
     }
 
-    // --- Standard Firebase Auth for regular employees ---
+    // --- Database-first authentication for regular employees ---
     try {
-        let userCredential;
-        try {
-            userCredential = await signInWithEmailAndPassword(auth, email, password);
-        } catch (error: any) {
-             if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
-                // This could mean the user doesn't exist in Auth, let's try creating them
-                try {
-                    userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                } catch (creationError: any) {
-                     if (creationError.code === 'auth/email-already-in-use') {
-                        // This means the user exists, so the original password was just wrong.
-                        toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
-                    } else {
-                        // Another error occurred during creation
-                        toast({ variant: "destructive", title: "فشل إنشاء الحساب", description: "حدث خطأ أثناء محاولة إعداد حسابك." });
-                    }
-                    setIsLoading(false);
-                    return;
-                }
-             } else {
-                // A different sign-in error occurred
-                throw error;
-             }
+        const employeesRef = collection(firestore, 'employees');
+        const q = query(employeesRef, where('employeeId', '==', employeeIdInput));
+        
+        const querySnapshot = await getDocs(q).catch(error => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: employeesRef.path,
+            operation: 'list',
+          }));
+          throw new Error("فشل البحث عن الموظف بسبب الأذونات.");
+        });
+
+        if (querySnapshot.empty) {
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+            setIsLoading(false);
+            return;
+        }
+
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = employeeDoc.data() as Employee;
+
+        if (employeeData.password !== password) {
+            toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+            setIsLoading(false);
+            return;
         }
         
+        // At this point, username and password from DB are correct.
+        // Now, sign in to Firebase Auth to establish a session.
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
         // After successful login, get the employee data to check for device verification
-        const employeeDocRef = doc(firestore, 'employees', userCredential.user.uid);
-        const employeeDoc = await getDoc(employeeDocRef);
-
-        if (!employeeDoc.exists()) {
-             await auth.signOut();
-             toast({ variant: "destructive", title: "فشل تسجيل الدخول", description: "لم يتم العثور على ملف الموظف المرتبط بهذا الحساب." });
-             setIsLoading(false);
-             return;
-        }
-
-        const employeeData = employeeDoc.data() as Employee;
         const deviceFingerprint = getDeviceFingerprint();
         if (employeeData.deviceVerificationEnabled) {
             if (!employeeData.deviceId) {
                 // First login, register device ID
-                await updateDoc(employeeDocRef, { deviceId: deviceFingerprint });
+                await updateDoc(employeeDoc.ref, { deviceId: deviceFingerprint });
             } else if (employeeData.deviceId !== deviceFingerprint) {
                 await auth.signOut(); // Sign out user
                 toast({ variant: "destructive", title: "فشل التحقق من الجهاز", description: "هذا الجهاز غير مصرح له بتسجيل الدخول لهذا الحساب." });
@@ -169,12 +163,15 @@ export default function LoginPage() {
 
     } catch (error: any) {
       console.error("Login Error:", error);
-       // This is a final catch-all for unexpected errors
-       toast({
-         variant: "destructive",
-         title: "فشل تسجيل الدخول",
-         description: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
-       });
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+          toast({ variant: "destructive", title: "فشل المصادقة", description: "حساب الموظف غير مهيأ بشكل صحيح في نظام المصادقة." });
+      } else {
+         toast({
+           variant: "destructive",
+           title: "فشل تسجيل الدخول",
+           description: error.message || "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+         });
+      }
     } finally {
       setIsLoading(false);
     }

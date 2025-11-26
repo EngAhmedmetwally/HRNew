@@ -7,6 +7,7 @@ export interface Employee {
   id: string; // Corresponds to Firebase Auth UID
   employeeId: string; // Custom employee ID used for login
   name: string;
+  password?: string; // Stored in DB for direct comparison
   contractType: 'full-time' | 'part-time';
   customCheckInTime?: string;
   customCheckOutTime?: string;
@@ -47,5 +48,3 @@ export interface WorkDay {
     delayMinutes: number;
     overtimeHours: number;
 }
-
-    

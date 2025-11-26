@@ -36,7 +36,7 @@ const employeeFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, { message: 'الاسم مطلوب' }),
   employeeId: z.string().min(1, { message: 'اسم المستخدم (رقم الموظف) مطلوب' }),
-  password: z.string().min(6, "يجب أن تكون كلمة المرور 6 أحرف على الأقل").optional().or(z.literal('')),
+  password: z.string().min(6, "يجب أن تكون كلمة المرور 6 أحرف على الأقل"),
   contractType: z.enum(['full-time', 'part-time'], { required_error: 'نوع العقد مطلوب' }),
   customCheckInTime: z.string().optional(),
   customCheckOutTime: z.string().optional(),
@@ -51,12 +51,17 @@ const employeeFormSchema = z.object({
     if (!data.id) {
         return !!data.password && data.password.length >= 6;
     }
-    // If it's an existing user, password can be empty (meaning no change)
+    // For existing user, if password is provided, it must be valid length
+    if (data.id && data.password) {
+        return data.password.length >= 6;
+    }
+    // If it's an existing user and password is not provided, it's ok (don't update)
     return true;
 }, {
-    message: "كلمة المرور مطلوبة للموظف الجديد ويجب أن تكون 6 أحرف على الأقل.",
+    message: "كلمة المرور يجب أن تكون 6 أحرف على الأقل.",
     path: ["password"],
 });
+
 
 type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
 
@@ -96,7 +101,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
             ...defaultFormValues,
             ...employee,
             id: employee.id,
-            password: '', // Always require re-entry or leave blank for no change
+            password: employee.password || '', // Show existing password for editing
             permissions: employee.permissions || [],
             customCheckInTime: employee.customCheckInTime || '',
             customCheckOutTime: employee.customCheckOutTime || '',
@@ -116,23 +121,17 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         return;
     }
 
-    const { password, ...dataToSave } = data;
-
     if (isEditMode && employee) {
         // Handle update
         const employeeDocRef = doc(firestore, 'employees', employee.id);
         try {
-            await updateDoc(employeeDocRef, dataToSave).catch(e => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: dataToSave }));
+            await updateDoc(employeeDocRef, data).catch(e => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'update', requestResourceData: data }));
                 throw e;
             });
-            // Note: Updating password in Firebase Auth requires re-authentication and is complex from client-side.
-            // For this app, we will skip Auth password updates. A more robust solution would use a backend function.
-            if (password) {
-                 toast({ variant: 'default', title: 'ملاحظة', description: 'تم تحديث بيانات الموظف. لتغيير كلمة المرور، يجب استخدام وظيفة إدارية مخصصة.' });
-            } else {
-                toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
-            }
+            // Note: We don't update password in Auth here for simplicity.
+            // A production app would require re-authentication or an admin SDK.
+            toast({ title: 'تم تحديث بيانات الموظف بنجاح' });
             onFinish();
         } catch (error) {
             console.error('Update failed:', error);
@@ -140,7 +139,7 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         }
     } else {
         // Handle create new employee
-        if (!password) {
+        if (!data.password) {
             form.setError('password', { message: 'كلمة المرور مطلوبة للموظف الجديد.' });
             return;
         }
@@ -149,11 +148,13 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
         
         try {
             // 1. Create the Auth user
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
             const newUserId = userCredential.user.uid;
 
             // 2. Create the Firestore document with the new user's UID as the document ID
             const employeeDocRef = doc(firestore, 'employees', newUserId);
+            const dataToSave = { ...data, id: newUserId };
+            
             await setDoc(employeeDocRef, dataToSave).catch(e => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: employeeDocRef.path, operation: 'create', requestResourceData: dataToSave }));
                 throw e;
@@ -221,10 +222,10 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
               <FormItem>
                   <FormLabel>كلمة المرور</FormLabel>
                   <FormControl>
-                  <Input type="password" {...field} placeholder={isEditMode ? 'اتركه فارغًا لعدم التغيير' : ''} />
+                  <Input type="password" {...field} />
                   </FormControl>
-                      <FormDescription>
-                      {isEditMode ? "لا يمكن تحديث كلمة المرور من هنا. يجب استخدام أدوات Firebase الإدارية." : "يجب أن تكون 6 أحرف على الأقل."}
+                  <FormDescription>
+                    يجب أن تكون 6 أحرف على الأقل.
                   </FormDescription>
                   <FormMessage />
               </FormItem>
@@ -477,5 +478,3 @@ export function EmployeeForm({ employee, onFinish }: EmployeeFormProps) {
     </Form>
   );
 }
-
-    
