@@ -21,6 +21,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "fire
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import type { Employee } from '@/lib/types';
 import { AuthBackground } from "@/components/auth/auth-background";
+import { FingerprintIcon } from "@/components/auth/fingerprint-icon";
 
 
 export default function LoginPage() {
@@ -31,6 +32,9 @@ export default function LoginPage() {
   const { user, roles, isUserLoading } = useUser();
 
    useEffect(() => {
+    // This component's only job is to wait for the user state to be confirmed
+    // and then redirect. The actual redirection logic is now inside the login page's
+    // useEffect hook, making this component a simple "wait and see".
     if (!isUserLoading) {
       if (user) {
         if (roles.isAdmin || roles.isHr) {
@@ -38,8 +42,10 @@ export default function LoginPage() {
         } else {
           router.replace('/scan');
         }
+      } else {
+        // If for some reason auth fails, send back to login.
+        // router.replace('/login');
       }
-      // If user is not logged in, do nothing, just show the login page.
     }
   }, [user, roles, isUserLoading, router]);
 
@@ -96,9 +102,8 @@ export default function LoginPage() {
             title: "تم تسجيل الدخول بنجاح",
             description: "جاري توجيهك...",
         });
-        // Redirecting is now handled by the useEffect hook based on user state
-        // We don't need router.replace('/splash') here anymore if useEffect handles it
-        // The onAuthStateChanged will trigger the user state update, which then triggers the redirection effect.
+        
+        router.replace('/splash');
 
     } catch (error: any) {
       console.error("Login Error:", error);
@@ -123,61 +128,66 @@ export default function LoginPage() {
   
    if (isUserLoading || user) {
         return (
-             <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background">
-                <AuthBackground />
-                <div className="absolute top-8 flex items-center gap-2 text-lg font-semibold text-foreground">
-                    <Building className="h-6 w-6" />
-                    <span>HR Pulse</span>
+             <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background text-foreground">
+                <div className="absolute inset-0 bg-background" />
+                <div className="z-10 flex flex-col items-center text-center">
+                    <FingerprintIcon className="h-20 w-20 mb-4 text-primary" />
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">HighClass HR</h1>
+                    <p className="text-muted-foreground mt-2">
+                        جاري المصادقة وتجهيز لوحة التحكم الخاصة بك...
+                    </p>
                 </div>
-                <p>جاري التحميل...</p>
             </div>
         )
    }
 
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background">
-       <AuthBackground />
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background p-4">
+       <div className="absolute inset-0 bg-background" />
 
-       <div className="absolute top-8 flex items-center gap-2 text-lg font-semibold text-foreground">
-            <Building className="h-6 w-6" />
-            <span>HR Pulse</span>
+        <div className="z-10 w-full max-w-sm">
+            <div className="flex flex-col items-center text-center mb-6">
+                 <FingerprintIcon className="h-16 w-16 mb-4" />
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">HighClass HR</h1>
+                <p className="text-muted-foreground mt-2">نظام ذكي للحضور والانصراف والرواتب</p>
+            </div>
+
+          <Card className="z-10 w-full bg-card/50 backdrop-blur-sm">
+             <form onSubmit={handleLogin}>
+                <CardHeader className="text-center">
+                    <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
+                    <CardDescription>
+                    أدخل رقم الموظف وكلمة المرور للوصول إلى حسابك
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                    <Label htmlFor="employeeId">رقم الموظف</Label>
+                    <Input id="employeeId" name="employeeId" type="text" placeholder="E001" required />
+                    </div>
+                    <div className="space-y-2">
+                    <Label htmlFor="password">كلمة المرور</Label>
+                    <Input id="password" name="password" type="password" required />
+                    </div>
+                </CardContent>
+                <CardFooter className="flex flex-col gap-4">
+                    <Button className="w-full" type="submit" disabled={isLoading}>
+                        {isLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}
+                    </Button>
+                </CardFooter>
+            </form>
+          </Card>
+            <p className="z-10 mt-4 text-center text-sm text-muted-foreground">
+                هل نسيت كلمة المرور؟{' '}
+                <Link
+                    href="#"
+                    className="underline underline-offset-4 hover:text-primary"
+                >
+                    إعادة تعيين
+                </Link>
+            </p>
         </div>
-
-      <Card className="z-10 w-full max-w-sm bg-background/80 backdrop-blur-sm">
-         <form onSubmit={handleLogin}>
-            <CardHeader className="text-center">
-                <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
-                <CardDescription>
-                أدخل رقم الموظف وكلمة المرور للوصول إلى حسابك
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                <Label htmlFor="employeeId">رقم الموظف</Label>
-                <Input id="employeeId" name="employeeId" type="text" placeholder="E001" required />
-                </div>
-                <div className="space-y-2">
-                <Label htmlFor="password">كلمة المرور</Label>
-                <Input id="password" name="password" type="password" required />
-                </div>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-4">
-                <Button className="w-full" type="submit" disabled={isLoading}>
-                    {isLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}
-                </Button>
-            </CardFooter>
-        </form>
-      </Card>
-        <p className="z-10 mt-4 text-center text-sm text-muted-foreground">
-            هل نسيت كلمة المرور؟{' '}
-            <Link
-                href="#"
-                className="underline underline-offset-4 hover:text-primary"
-            >
-                إعادة تعيين
-            </Link>
-        </p>
     </div>
   );
 }

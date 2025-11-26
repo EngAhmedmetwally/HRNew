@@ -26,6 +26,7 @@ import {
 import { useUser, useFirebase } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "../ui/button";
+import { FingerprintIcon } from "../auth/fingerprint-icon";
 
 const menuItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ['admin', 'hr'] },
@@ -64,9 +65,9 @@ export function Sidebar() {
     <AppSidebar side="right" variant="sidebar" collapsible="icon">
       <SidebarHeader className="h-16 justify-center">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Building className="h-8 w-8 text-primary" />
+          <FingerprintIcon className="h-8 w-8 text-primary" />
           <span className="font-bold text-lg text-foreground group-data-[collapsible=icon]:hidden">
-            HR Pulse
+            HighClass HR
           </span>
         </Link>
       </SidebarHeader>

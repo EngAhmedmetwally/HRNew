@@ -17,6 +17,7 @@ import { findImage } from "@/lib/placeholder-images";
 import Link from 'next/link';
 import { useFirebase, useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
+import { FingerprintIcon } from "../auth/fingerprint-icon";
 
 export function Header() {
   const { auth } = useFirebase();
@@ -35,8 +36,8 @@ export function Header() {
         <SidebarTrigger className="md:hidden" />
          <div className="hidden md:block">
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-                <Building className="h-6 w-6" />
-                <span>HR Pulse</span>
+                <FingerprintIcon className="h-6 w-6 text-primary" />
+                <span className="font-bold">HighClass HR</span>
             </Link>
          </div>
       </div>

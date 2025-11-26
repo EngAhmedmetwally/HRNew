@@ -22,8 +22,8 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <Head>
-        <title>HR Pulse</title>
-        <meta name="description" content="A smart, cloud-based attendance and payroll system." />
+        <title>HighClass HR</title>
+        <meta name="description" content="نظام ذكي للحضور والانصراف والرواتب." />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
